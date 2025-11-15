@@ -31,6 +31,8 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  const showPersonalCoachDashboard = currentUser.role === UserRole.COACH;
+
   // Default view for logged-in user
   return (
     <div>
@@ -38,10 +40,8 @@ const Dashboard: React.FC = () => {
       
       {currentUser.role === UserRole.ADMIN && <AdminDashboard setViewAsCoach={setViewAsCoach} />}
       
-      {/* This block will now only show for the admin's own dashboard view, not during impersonation */}
-      {(currentUser.role === UserRole.COACH || currentUser.role === UserRole.ADMIN) && (
-        <div className={currentUser.role === UserRole.ADMIN ? "mt-12 pt-8 border-t border-gray-700" : ""}>
-          {currentUser.role === UserRole.ADMIN && <h2 className="text-2xl font-bold text-white mb-4">My Coach Dashboard</h2>}
+      {showPersonalCoachDashboard && (
+        <div>
           <CoachDashboard />
         </div>
       )}

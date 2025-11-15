@@ -139,7 +139,11 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
               const isSelf = currentUser?.id === coach.id;
               
               return (
-                <tr key={coach.id} className="border-b border-gray-800 hover:bg-gray-800">
+                <tr 
+                  key={coach.id} 
+                  className="border-b border-gray-800 hover:bg-gray-800 cursor-pointer"
+                  onClick={() => onViewCoachDashboard(coach)}
+                >
                   <td className="py-2 px-4">{coach.name}</td>
                   <td className="py-2 px-4">{coach.email}</td>
                   <td className="py-2 px-4">{coach.level}</td>
@@ -152,17 +156,29 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
                     <Button 
                       variant="secondary" 
                       className="text-xs py-1 px-2" 
-                      onClick={() => onViewCoachDashboard(coach)}
-                      disabled={isSelf}
-                      title={isSelf ? "This is your own account." : `View ${coach.name}'s dashboard`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onViewCoachDashboard(coach);
+                      }}
+                      title={`View ${coach.name}'s dashboard`}
                     >
                       View
                     </Button>
-                    <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleEditClick(coach)}>Edit</Button>
+                    <Button 
+                      variant="secondary" 
+                      className="text-xs py-1 px-2" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditClick(coach);
+                      }}
+                    >
+                      Edit
+                    </Button>
                     <Button 
                       variant="danger" 
                       className="text-xs py-1 px-2" 
-                      onClick={() => {
+                      onClick={(e) => {
+                          e.stopPropagation();
                           if (window.confirm(`Are you sure you want to delete ${coach.name}? This action cannot be undone.`)) {
                               deleteCoach(coach.id);
                           }

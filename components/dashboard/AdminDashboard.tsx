@@ -7,8 +7,10 @@ import CalendarView from './CalendarView';
 import ActivityLog from './ActivityLog';
 import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
+import CoachFinancialSummary from './CoachFinancialSummary';
 import { Coach } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { useData } from '../../context/DataContext';
 
 type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials';
 
@@ -18,7 +20,9 @@ interface AdminDashboardProps {
 
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [financialCoach, setFinancialCoach] = useState<Coach | null>(null);
   const { currentUser } = useAuth();
+  const { bookings, classes, members } = useData();
 
   const renderContent = () => {
     // Add a guard clause for safety
@@ -35,9 +39,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
         return <ClassManagement />;
       case 'calendar':
         return <CalendarView />;
-       case 'financials':
-        // FIX: Pass the current user to display admin-specific financial data.
-        return <FinancialsDashboard user={currentUser} />;
+      case 'financials':
+        return financialCoach ? (
+          <CoachFinancialSummary
+            coach={financialCoach}
+            bookings={bookings}
+            classes={classes}
+            members={members}
+            onClose={() => setFinancialCoach(null)}
+          />
+        ) : (
+          <FinancialsDashboard user={currentUser} onViewCoachFinancials={setFinancialCoach} />
+        );
       case 'activity':
         return <ActivityLog />;
       case 'notifications':

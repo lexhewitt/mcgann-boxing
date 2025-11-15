@@ -8,6 +8,7 @@ import Button from '../ui/Button';
 import AddFamilyMemberModal from './AddFamilyMemberModal';
 import { calculateAge } from '../../utils/helpers';
 import GymAccess from './GymAccess';
+import MemberFinancialSummary from './MemberFinancialSummary';
 
 const HealthAndSafetyNotice: React.FC = () => (
     <div className="bg-yellow-900/20 border-l-4 border-yellow-500 text-yellow-300 p-4 rounded-lg my-8 lg:col-span-3">
@@ -137,6 +138,16 @@ const MemberDashboard: React.FC = () => {
                             <p className="text-gray-400">You have no payment history.</p>
                         )}
                     </div>
+                </div>
+                <div>
+                    <h2 className="text-2xl font-semibold text-white mb-4">Financial Overview</h2>
+                    <MemberFinancialSummary
+                        member={currentUser as Member}
+                        bookings={bookings}
+                        classes={classes}
+                        familyMembers={familyMembers}
+                        embedded
+                    />
                 </div>
             </div>
 

@@ -6,6 +6,7 @@ import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { Member, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import MemberFinancialSummary from './MemberFinancialSummary';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -255,11 +256,12 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
 
 
 const MemberManagement: React.FC = () => {
-  const { members, deleteMember, bookings, classes } = useData();
+  const { members, deleteMember, bookings, classes, familyMembers } = useData();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [memberToViewFinancials, setMemberToViewFinancials] = useState<Member | null>(null);
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -328,7 +330,10 @@ const MemberManagement: React.FC = () => {
               <th className="py-2 px-4 text-left">Expiry</th>
               <th className="py-2 px-4 text-left">Rolling?</th>
               <th className="py-2 px-4 text-left">Owed (£)</th>
-              <th className="py-2 px-4 text-center" colSpan={3}>Actions</th>
+              <th className="py-2 px-4 text-left">Financials</th>
+              <th className="py-2 px-4 text-left">Email</th>
+              <th className="py-2 px-4 text-left">Edit</th>
+              <th className="py-2 px-4 text-left">Delete</th>
             </tr>
           </thead>
           <tbody>
@@ -344,6 +349,15 @@ const MemberManagement: React.FC = () => {
                   <td className="py-2 px-4">{member.membershipExpiry ? new Date(member.membershipExpiry).toLocaleDateString() : 'N/A'}</td>
                   <td className="py-2 px-4">{member.isRollingMonthly ? 'Yes' : 'No'}</td>
                    <td className={`py-2 px-4 font-bold ${member.owedAmount > 0 ? 'text-brand-red' : 'text-green-400'}`}>{member.owedAmount.toFixed(2)}</td>
+                  <td className="py-2 px-4">
+                    <Button 
+                      variant="secondary" 
+                      className="text-xs py-1 px-2 w-full" 
+                      onClick={() => setMemberToViewFinancials(member)}
+                    >
+                      View
+                    </Button>
+                  </td>
                   <td className="py-2 px-4">
                     <a href={`mailto:${member.email}`}>
                       <Button variant="secondary" className="text-xs py-1 px-2 w-full">Email</Button>
@@ -369,6 +383,17 @@ const MemberManagement: React.FC = () => {
       </div>
       <AddMemberModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
       <EditMemberModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} member={memberToEdit} />
+      {memberToViewFinancials && (
+        <div className="mt-8">
+            <MemberFinancialSummary
+                member={memberToViewFinancials}
+                bookings={bookings}
+                classes={classes}
+                familyMembers={familyMembers}
+                onClose={() => setMemberToViewFinancials(null)}
+            />
+        </div>
+      )}
     </>
   );
 };
