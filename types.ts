@@ -118,4 +118,6 @@ export interface GymAccessLog {
     memberId: string;
     accessDate: string; // ISO String
     amountPaid: number;
+    paid: boolean;
+    notes?: string;
 }

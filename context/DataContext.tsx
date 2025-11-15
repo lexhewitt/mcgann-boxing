@@ -17,7 +17,7 @@ interface DataContextType {
   acceptClassTransfer: (notificationId: string, actor: AppUser) => void;
   undoClassTransfer: (classId: string, actor: AppUser) => void;
   cancelClassTransferRequest: (notificationId: string, actor: AppUser) => void;
-  logGymAccess: (memberId: string, amount: number) => void;
+  logGymAccess: (memberId: string, amount: number, paid?: boolean) => void;
   addAvailabilitySlot: (slot: Omit<AvailabilitySlot, 'id'>) => void;
   deleteAvailabilitySlot: (slotId: string) => void;
   addUnavailableSlot: (slot: Omit<UnavailableSlot, 'id'>) => void;
@@ -329,12 +329,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUnavailableSlots(prev => prev.filter(s => s.id !== slotId));
   }
 
-  const logGymAccess = (memberId: string, amount: number) => {
+  const logGymAccess = (memberId: string, amount: number, paid: boolean = false) => {
     const newLog: GymAccessLog = {
         id: `ga-${Date.now()}`,
         memberId,
         amountPaid: amount,
         accessDate: new Date().toISOString(),
+        paid,
+        notes: paid ? 'Payment confirmed via Stripe' : 'Charge raised - awaiting Stripe payment',
     };
     setGymAccessLogs(prev => [newLog, ...prev]);
   };

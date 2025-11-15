@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Member, UserRole } from '../../types';
@@ -7,6 +7,7 @@ import Button from '../ui/Button';
 const GymAccess: React.FC = () => {
     const { currentUser } = useAuth();
     const { gymAccessLogs, logGymAccess } = useData();
+    const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
     if (!currentUser || currentUser.role !== UserRole.MEMBER) return null;
 
@@ -16,17 +17,19 @@ const GymAccess: React.FC = () => {
         gymAccessLogs.filter(log => log.memberId === member.id)
     , [gymAccessLogs, member.id]);
 
+    const todayKey = new Date().toISOString().split('T')[0];
+
     const hasCheckedInToday = useMemo(() => {
-        const today = new Date().toISOString().split('T')[0];
-        return myAccessLogs.some(log => log.accessDate.startsWith(today));
-    }, [myAccessLogs]);
+        return myAccessLogs.some(log => log.accessDate.startsWith(todayKey));
+    }, [myAccessLogs, todayKey]);
     
     const canCheckIn = member.membershipStatus === 'PAYG' && !hasCheckedInToday;
 
     const handleCheckIn = () => {
         if (!canCheckIn) return;
-        logGymAccess(member.id, 5.00);
-        alert(`Thank you, ${member.name}! You're checked in for today.`);
+        logGymAccess(member.id, 5.00, false);
+        setStatusMessage('£5.00 charge raised. Please complete payment via Stripe (coming soon).');
+        alert(`Thank you, ${member.name}! You're checked in for today. A £5 charge has been recorded.`);
     };
 
     return (
@@ -44,8 +47,14 @@ const GymAccess: React.FC = () => {
                         className="w-full text-lg py-3"
                         title={hasCheckedInToday ? 'You have already checked in today.' : 'Check-in for today'}
                     >
-                        {hasCheckedInToday ? 'Checked-In for Today' : 'Check-in & Pay £5.00'}
+                        {hasCheckedInToday ? 'Charge Raised for Today' : 'Check-in & Raise £5 Charge'}
                     </Button>
+                    <p className="text-xs text-gray-500 mt-2">
+                        Charges are recorded instantly. Stripe will be used to settle payments automatically when live.
+                    </p>
+                    {statusMessage && (
+                        <p className="text-sm text-yellow-400 mt-2">{statusMessage}</p>
+                    )}
                 </>
             )}
             {member.membershipStatus === 'None' && (

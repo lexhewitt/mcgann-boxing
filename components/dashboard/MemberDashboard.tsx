@@ -35,7 +35,7 @@ const HealthAndSafetyNotice: React.FC = () => (
 const MemberDashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
     // FIX: Destructured 'members' from useData to make it available in the component scope.
-    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember } = useData();
+    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, gymAccessLogs } = useData();
     const [isEditing, setIsEditing] = useState(false);
     const [isAddFamilyMemberOpen, setAddFamilyMemberOpen] = useState(false);
     
@@ -80,9 +80,16 @@ const MemberDashboard: React.FC = () => {
     }
 
     return (
-        <>
+        <div className="space-y-8">
+        <MemberFinancialSummary
+            member={currentUser as Member}
+            bookings={bookings}
+            classes={classes}
+            familyMembers={familyMembers}
+            gymAccessLogs={gymAccessLogs}
+        />
+        <HealthAndSafetyNotice />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <HealthAndSafetyNotice />
             <div className="lg:col-span-2 space-y-8">
                 <div>
                     <h2 className="text-2xl font-semibold text-white mb-4">Book a Class</h2>
@@ -138,16 +145,6 @@ const MemberDashboard: React.FC = () => {
                             <p className="text-gray-400">You have no payment history.</p>
                         )}
                     </div>
-                </div>
-                <div>
-                    <h2 className="text-2xl font-semibold text-white mb-4">Financial Overview</h2>
-                    <MemberFinancialSummary
-                        member={currentUser as Member}
-                        bookings={bookings}
-                        classes={classes}
-                        familyMembers={familyMembers}
-                        embedded
-                    />
                 </div>
             </div>
 
@@ -223,7 +220,7 @@ const MemberDashboard: React.FC = () => {
             isOpen={isAddFamilyMemberOpen} 
             onClose={() => setAddFamilyMemberOpen(false)} 
         />
-        </>
+        </div>
     );
 };
 
