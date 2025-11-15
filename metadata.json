@@ -1,0 +1,5 @@
+{
+  "name": "Fleetwood Boxing Gym Booking",
+  "description": "A comprehensive booking and management application for Fleetwood Boxing Gym. Members can book classes, and coaches and admins can manage schedules, members, and more.",
+  "requestFramePermissions": []
+}
