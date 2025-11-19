@@ -1,0 +1,8 @@
+# Files/directories to skip when uploading sources with gcloud.
+.gcloudignore
+.gcloud_config
+.env.local
+node_modules
+dist
+.git
+.gitignore

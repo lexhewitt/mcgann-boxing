@@ -88,13 +88,14 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
 // This ensures that any request to /server-api/... is handled by the API router first.
 app.use('/server-api', apiRouter);
 
-// Serve static files (like index.html, css, etc.) from the root directory.
-app.use(express.static(path.join(__dirname)));
+// Serve static files from the production build directory
+const distPath = path.join(__dirname, 'dist');
+app.use(express.static(distPath));
 
 // The "catchall" handler: for any request that doesn't match an API route or a static file,
 // send back the main index.html file. This is crucial for client-side routing in a SPA.
 app.get('*', (req, res) => {
-  res.sendFile(path.resolve(__dirname, 'index.html'));
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
 
