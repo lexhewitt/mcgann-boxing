@@ -91,12 +91,21 @@ const CoachScheduler: React.FC = () => {
     if (!member || !activeSlot) return;
     setSubmitting(true);
     try {
+      const slotCoach = coaches.find(c => c.id === activeSlot.coachId);
       localStorage.setItem(
         'pendingSlot',
         JSON.stringify({
           slotId: activeSlot.id,
           memberId: member.id,
           participantName,
+          summary: {
+            type: activeSlot.type === SlotType.PRIVATE ? 'PRIVATE' : 'GROUP',
+            title: activeSlot.title,
+            schedule: new Date(activeSlot.start).toLocaleString(),
+            coachName: slotCoach?.name,
+            participantName,
+            price: activeSlot.price,
+          },
         }),
       );
       const result = await handleCoachSlotCheckout(activeSlot, member.id, participantName);

@@ -1,10 +1,38 @@
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import Dashboard from './dashboard/Dashboard';
 import LandingPage from './LandingPage';
-import { AppUser } from '../types';
+
+interface ConfirmationSummary {
+  title?: string;
+  schedule?: string;
+  coachName?: string;
+  participantName?: string;
+  price?: number;
+  type?: 'CLASS' | 'PRIVATE';
+}
+
+interface PendingClassPayload {
+  memberId: string;
+  participantId: string;
+  classId: string;
+  summary?: ConfirmationSummary;
+}
+
+interface PendingSlotPayload {
+  slotId: string;
+  memberId: string;
+  participantName: string;
+  summary?: ConfirmationSummary;
+}
+
+interface ConfirmationState {
+  heading: string;
+  message: string;
+  summary?: ConfirmationSummary;
+}
 
 interface MainContentProps {
   onRegisterClick: () => void;
@@ -12,7 +40,8 @@ interface MainContentProps {
 
 const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
   const { currentUser } = useAuth();
-  const { addBooking, bookCoachSlot, coachSlots } = useData();
+  const { addBooking, bookCoachSlot, coachSlots, members } = useData();
+  const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   
   useEffect(() => {
     // This effect runs on page load and checks if the user has been redirected
@@ -29,7 +58,7 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
         // Ensure there is a pending booking and a logged-in user to attribute it to.
         if (pendingBookingJSON) {
             try {
-                const pendingBooking = JSON.parse(pendingBookingJSON);
+                const pendingBooking: PendingClassPayload = JSON.parse(pendingBookingJSON);
                 
                 // Security check: ensure the booking belongs to the current user.
                 if (pendingBooking.memberId === currentUser.id) {
@@ -39,11 +68,18 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
                         classId: pendingBooking.classId,
                         paid: true, // Payment was successful
                     }, currentUser);
-                    alert('Payment successful! Your class has been booked.');
+                    setConfirmation({
+                      heading: 'Thank you! Your class is reserved.',
+                      message: 'Payment was received and your class booking has been added. Sean or your coach will confirm any remaining details shortly.',
+                      summary: pendingBooking.summary ?? { type: 'CLASS' },
+                    });
                 }
             } catch (e) {
                 console.error("Error processing pending booking from localStorage:", e);
-                alert("There was an issue finalizing your booking. Please contact support.");
+                setConfirmation({
+                  heading: 'Payment received – manual confirmation needed',
+                  message: 'We logged your payment but could not auto-complete the booking. Sean has been notified and will confirm shortly.',
+                });
             } finally {
                 // Always remove the item from localStorage after processing.
                 localStorage.removeItem('pendingBooking');
@@ -53,21 +89,34 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
         const pendingSlotJSON = localStorage.getItem('pendingSlot');
         if (pendingSlotJSON) {
             try {
-                const pendingSlot = JSON.parse(pendingSlotJSON);
+                const pendingSlot: PendingSlotPayload = JSON.parse(pendingSlotJSON);
                 if (pendingSlot.memberId === currentUser.id) {
                     const slotExists = coachSlots.find(slot => slot.id === pendingSlot.slotId);
-                    if (slotExists) {
-                        bookCoachSlot(pendingSlot.slotId, currentUser, pendingSlot.participantName || currentUser.name);
-                        alert('Session confirmed! You will also receive a confirmation soon.');
+                    const memberRecord = members.find(m => m.id === pendingSlot.memberId);
+                    if (!slotExists || !memberRecord) {
+                        console.warn('Pending slot or member not found; clearing pending state.');
+                        setConfirmation({
+                          heading: 'Payment received – scheduling shortly',
+                          message: 'We could not auto-schedule your private session because availability data was still loading. Sean will confirm your requested slot as soon as possible.',
+                          summary: pendingSlot.summary ?? { type: 'PRIVATE' },
+                        });
                         localStorage.removeItem('pendingSlot');
-                    } else {
-                        console.warn('Pending slot not found; keeping record for retry.');
-                        return; // keep query + storage until slots load
+                        return;
                     }
+                    bookCoachSlot(pendingSlot.slotId, memberRecord, pendingSlot.participantName || memberRecord.name);
+                    setConfirmation({
+                      heading: 'Thanks! Your private session request is in.',
+                      message: 'Payment was successful. Sean or your coach will send a confirmation message shortly.',
+                      summary: pendingSlot.summary ?? { type: 'PRIVATE', participantName: pendingSlot.participantName },
+                    });
+                    localStorage.removeItem('pendingSlot');
                 }
             } catch (error) {
                 console.error('Error processing pending slot booking:', error);
-                alert('We were unable to finalize your session booking. Please contact support.');
+                setConfirmation({
+                  heading: 'Payment received – manual confirmation needed',
+                  message: 'We were unable to auto-schedule this session, but Sean has been notified and will confirm manually.',
+                });
                 localStorage.removeItem('pendingSlot');
             }
         }
@@ -75,10 +124,40 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
         // Clean up the URL to remove the query parameters.
         window.history.replaceState(null, '', window.location.pathname);
     }
-  }, [currentUser, addBooking, bookCoachSlot, coachSlots]);
+  }, [currentUser, addBooking, bookCoachSlot, coachSlots, members]);
 
 
-  return currentUser ? <Dashboard /> : <LandingPage onRegisterClick={onRegisterClick} />;
+  return (
+    <>
+      {currentUser ? <Dashboard /> : <LandingPage onRegisterClick={onRegisterClick} />}
+      {confirmation && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
+          <div className="bg-brand-gray max-w-lg w-full rounded-2xl p-8 shadow-xl text-white space-y-4">
+            <div>
+              <p className="text-sm uppercase tracking-wide text-brand-red">Booking received</p>
+              <h2 className="text-2xl font-semibold">{confirmation.heading}</h2>
+            </div>
+            {confirmation.summary && (
+              <div className="bg-black/30 rounded-xl p-4 space-y-2 text-sm text-gray-200">
+                {confirmation.summary.title && <p className="text-lg font-semibold text-white">{confirmation.summary.title}</p>}
+                {confirmation.summary.schedule && <p>{confirmation.summary.schedule}</p>}
+                {confirmation.summary.coachName && <p>Coach: {confirmation.summary.coachName}</p>}
+                {confirmation.summary.participantName && <p>Participant: {confirmation.summary.participantName}</p>}
+                {typeof confirmation.summary.price === 'number' && <p>Payment: £{confirmation.summary.price.toFixed(2)}</p>}
+              </div>
+            )}
+            <p className="text-gray-200">{confirmation.message}</p>
+            <button
+              onClick={() => setConfirmation(null)}
+              className="w-full bg-brand-red text-white py-2 rounded-lg font-semibold hover:bg-brand-red/90 transition"
+            >
+              Back to dashboard
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 };
 
 export default MainContent;

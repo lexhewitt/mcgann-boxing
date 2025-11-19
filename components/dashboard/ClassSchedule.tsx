@@ -76,10 +76,19 @@ const ClassSchedule: React.FC = () => {
 
         // Store the booking details in localStorage before redirecting to Stripe.
         // This allows us to retrieve and finalize the booking upon successful return.
+        const coach = coaches.find(c => c.id === classToBook.coachId);
         const pendingBooking = {
             memberId: currentUser.id,
             participantId: selectedParticipant,
             classId: classToBook.id,
+            summary: {
+              type: 'CLASS',
+              title: classToBook.name,
+              schedule: `${classToBook.day} ${classToBook.time}`,
+              coachName: coach?.name,
+              participantName: participant.name,
+              price: classToBook.price,
+            },
         };
         localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
         

@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useCallback, useEffect } from 'react';
 import { AppUser, Member, UserRole, Coach } from '../types';
 import { useData } from './DataContext';
 
@@ -13,6 +13,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_EMAIL_KEY = 'fleetwood-auth-email';
+
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const { members, coaches, addMember: addMemberToData, updateMember, addCoach: addCoachToData } = useData();
@@ -22,6 +24,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const user = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (user) {
       setCurrentUser(user);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(AUTH_EMAIL_KEY, user.email.toLowerCase());
+      }
       return true;
     }
     return false;
@@ -29,6 +34,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const logout = () => {
     setCurrentUser(null);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(AUTH_EMAIL_KEY);
+    }
   };
 
   const registerMember = (memberData: Omit<Member, 'id' | 'role'>): AppUser | null => {
@@ -39,6 +47,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const newMember = addMemberToData({ ...memberData, role: UserRole.MEMBER });
     setCurrentUser(newMember);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(AUTH_EMAIL_KEY, newMember.email.toLowerCase());
+    }
     return newMember;
   };
   
@@ -69,6 +80,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
     }
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (currentUser) return;
+    const savedEmail = localStorage.getItem(AUTH_EMAIL_KEY);
+    if (!savedEmail) return;
+    const allUsers: AppUser[] = [...members, ...coaches];
+    const matchedUser = allUsers.find(u => u.email.toLowerCase() === savedEmail.toLowerCase());
+    if (matchedUser) {
+      setCurrentUser(matchedUser);
+    }
+  }, [members, coaches, currentUser]);
 
 
   return (
