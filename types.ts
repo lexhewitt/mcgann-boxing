@@ -203,9 +203,18 @@ export interface Transaction {
   settledAt?: string;
 }
 
+export type BookingAlertStatus = 'PENDING' | 'ACKNOWLEDGED';
+
 export interface BookingAlert {
   id: string;
   timestamp: string;
   coachId: string;
   message: string;
+  serviceType?: 'CLASS' | 'PRIVATE';
+  referenceId?: string;
+  participantName?: string;
+  amount?: number;
+  status: BookingAlertStatus;
+  confirmedBy?: string;
+  confirmedAt?: string;
 }

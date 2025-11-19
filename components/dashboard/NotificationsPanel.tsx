@@ -9,7 +9,7 @@ interface NotificationsPanelProps {
 }
 
 const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
-    const { notifications, bookingAlerts, classes, coaches, acceptClassTransfer, cancelClassTransferRequest } = useData();
+    const { notifications, bookingAlerts, classes, coaches, acceptClassTransfer, cancelClassTransferRequest, acknowledgeBookingAlert } = useData();
 
     if (!user || (user.role !== UserRole.ADMIN && user.role !== UserRole.COACH)) {
         return null;
@@ -109,12 +109,38 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
             <div className="mb-8">
                 <h3 className="text-xl font-bold text-white mb-4 pb-2 border-b border-gray-700">Booking Notifications</h3>
                 <div className="space-y-3">
-                    {relevant.map(alert => (
-                        <div key={alert.id} className="bg-brand-dark p-3 rounded-md">
-                            <p className="text-white">{alert.message}</p>
-                            <p className="text-xs text-gray-400 mt-1">{new Date(alert.timestamp).toLocaleString()}</p>
-                        </div>
-                    ))}
+                    {relevant.map(alert => {
+                        const coach = coaches.find(c => c.id === alert.coachId);
+                        return (
+                            <div key={alert.id} className="bg-brand-dark p-3 rounded-md space-y-2">
+                                <div className="flex justify-between items-start gap-4">
+                                    <div className="text-white">
+                                        <p className="font-semibold">{alert.serviceType === 'PRIVATE' ? 'Private Session Booking' : 'Class Booking'}</p>
+                                        <p className="text-sm text-gray-300">{alert.message}</p>
+                                        {alert.participantName && <p className="text-xs text-gray-400 mt-1">Participant: {alert.participantName}</p>}
+                                        {typeof alert.amount === 'number' && <p className="text-xs text-gray-400">Amount: £{alert.amount.toFixed(2)}</p>}
+                                        {user.role === UserRole.ADMIN && coach && (
+                                            <p className="text-xs text-gray-500">Coach: {coach.name}</p>
+                                        )}
+                                        {alert.confirmedBy && alert.confirmedAt && (
+                                            <p className="text-xs text-green-400 mt-1">Confirmed by {alert.confirmedBy} on {new Date(alert.confirmedAt).toLocaleString()}</p>
+                                        )}
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className={`px-2 py-1 text-xs font-bold rounded ${alert.status === 'PENDING' ? 'bg-yellow-500 text-black' : 'bg-green-600'}`}>
+                                            {alert.status === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed'}
+                                        </span>
+                                        {alert.status === 'PENDING' && (
+                                            <Button onClick={() => acknowledgeBookingAlert(alert.id, user)} className="text-xs py-1 px-2">
+                                                Mark confirmed
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                                <p className="text-xs text-gray-500">{new Date(alert.timestamp).toLocaleString()}</p>
+                            </div>
+                        )
+                    })}
                 </div>
             </div>
         );

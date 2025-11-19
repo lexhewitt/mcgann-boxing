@@ -47,6 +47,7 @@ interface DataContextType {
   updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
   bookCoachSlot: (slotId: string, member: Member, participantName: string) => void;
   addGuestBooking: (entry: Omit<GuestBooking, 'id'>) => void;
+  acknowledgeBookingAlert: (alertId: string, actor?: AppUser) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -88,19 +89,47 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setTransactions(prev => prev.map(tx => tx.id === transactionId ? { ...tx, ...updates } : tx));
   };
 
-  const addBookingAlert = (targetCoachId: string, message: string) => {
+  const getOwnerId = (): string => {
+    const admin = coaches.find(c => c.role === UserRole.ADMIN);
+    return admin?.id ?? coaches[0]?.id ?? '';
+  };
+
+  const addBookingAlert = (
+    targetCoachId: string,
+    message: string,
+    meta?: Partial<Omit<BookingAlert, 'id' | 'timestamp' | 'coachId' | 'message' | 'status'>>
+  ) => {
     if (!targetCoachId) return;
     setBookingAlerts(prev => [{
       id: `alert-${Date.now()}-${Math.random()}`,
       timestamp: new Date().toISOString(),
       coachId: targetCoachId,
       message,
+      status: 'PENDING',
+      ...meta,
     }, ...prev]);
   };
 
-  const notifyCoachAndOwner = (coachId: string, message: string) => {
+  const acknowledgeBookingAlert = (alertId: string, actor?: AppUser) => {
+    setBookingAlerts(prev => prev.map(alert => 
+      alert.id === alertId 
+        ? { 
+            ...alert, 
+            status: 'ACKNOWLEDGED',
+            confirmedBy: actor?.name ?? alert.confirmedBy,
+            confirmedAt: new Date().toISOString(),
+          }
+        : alert
+    ));
+  };
+
+  const notifyCoachAndOwner = (
+    coachId: string, 
+    message: string,
+    meta?: Partial<Omit<BookingAlert, 'id' | 'timestamp' | 'coachId' | 'message' | 'status'>>
+  ) => {
     const ownerId = getOwnerId();
-    [coachId, ownerId].forEach(id => addBookingAlert(id, message));
+    [coachId, ownerId].forEach(id => addBookingAlert(id, message, meta));
 
     const coach = coaches.find(c => c.id === coachId);
     if (coach?.mobileNumber) {
@@ -146,7 +175,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const message = `Client: ${participantName} booked ${slot.title} on ${new Date(slot.start).toLocaleString()}. Please confirm.`;
-    notifyCoachAndOwner(slot.coachId, message);
+    notifyCoachAndOwner(slot.coachId, message, {
+      serviceType: slot.type === SlotType.PRIVATE ? 'PRIVATE' : 'CLASS',
+      referenceId: slot.id,
+      participantName,
+      amount: slot.price,
+    });
   };
 
   const addGuestBooking = (entry: Omit<GuestBooking, 'id'>) => {
@@ -160,13 +194,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const gymClass = classes.find(cls => cls.id === entry.referenceId);
         if (gymClass) {
           const message = `Client: ${entry.participantName} booked ${gymClass.name} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
-          notifyCoachAndOwner(gymClass.coachId, message);
+          notifyCoachAndOwner(gymClass.coachId, message, {
+            serviceType: 'CLASS',
+            referenceId: gymClass.id,
+            participantName: entry.participantName,
+            amount: gymClass.price,
+          });
         }
       } else {
         const slot = coachSlots.find(slot => slot.id === entry.referenceId);
         if (slot) {
           const message = `Client: ${entry.participantName} booked ${slot.title} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
-          notifyCoachAndOwner(slot.coachId, message);
+          notifyCoachAndOwner(slot.coachId, message, {
+            serviceType: 'PRIVATE',
+            referenceId: slot.id,
+            participantName: entry.participantName,
+            amount: slot.price,
+          });
         }
       }
     }
@@ -314,7 +358,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         const message = `Client: ${participant.name} booked ${gymClass.name} (${gymClass.day} ${gymClass.time}). Please confirm.`;
-        notifyCoachAndOwner(gymClass.coachId, message);
+        notifyCoachAndOwner(gymClass.coachId, message, {
+          serviceType: 'CLASS',
+          referenceId: gymClass.id,
+          participantName: participant.name,
+          amount: gymClass.price,
+        });
     }
 
     setBookings(prev => [...prev, newBooking]);
@@ -485,7 +534,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking }}>
+    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, acknowledgeBookingAlert }}>
       {children}
     </DataContext.Provider>
   );
