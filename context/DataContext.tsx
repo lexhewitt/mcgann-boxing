@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus } from '../types';
-import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS } from '../constants';
+import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole } from '../types';
+import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS, INITIAL_TRANSACTIONS, COACH_SLOTS, INITIAL_COACH_APPOINTMENTS } from '../constants';
+import { sendWhatsAppNotification } from '../services/notificationService';
 
 interface DataContextType {
   coaches: Coach[];
@@ -13,6 +14,11 @@ interface DataContextType {
   unavailableSlots: UnavailableSlot[];
   gymAccessLogs: GymAccessLog[];
   notifications: ClassTransferNotification[];
+  bookingAlerts: BookingAlert[];
+  transactions: Transaction[];
+  coachSlots: CoachSlot[];
+  coachAppointments: CoachAppointment[];
+  guestBookings: GuestBooking[];
   createClassTransferRequest: (classId: string, targetCoachId: string, note: string, actor: AppUser) => void;
   acceptClassTransfer: (notificationId: string, actor: AppUser) => void;
   undoClassTransfer: (classId: string, actor: AppUser) => void;
@@ -37,6 +43,10 @@ interface DataContextType {
   updateClass: (gymClass: GymClass) => void;
   addClass: (gymClass: Omit<GymClass, 'id'>) => void;
   deleteClass: (classId: string) => void;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'currency' | 'createdAt'> & { currency?: Transaction['currency'] }) => Transaction;
+  updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
+  bookCoachSlot: (slotId: string, member: Member, participantName: string) => void;
+  addGuestBooking: (entry: Omit<GuestBooking, 'id'>) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -52,12 +62,115 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [unavailableSlots, setUnavailableSlots] = useState<UnavailableSlot[]>(UNAVAILABLE_SLOTS);
   const [gymAccessLogs, setGymAccessLogs] = useState<GymAccessLog[]>(GYM_ACCESS_LOGS);
   const [notifications, setNotifications] = useState<ClassTransferNotification[]>(INITIAL_NOTIFICATIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
+  const [coachSlots, setCoachSlots] = useState<CoachSlot[]>(COACH_SLOTS);
+  const [coachAppointments, setCoachAppointments] = useState<CoachAppointment[]>(INITIAL_COACH_APPOINTMENTS);
+  const [guestBookings, setGuestBookings] = useState<GuestBooking[]>([]);
+  const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([]);
 
   const addAuditLog = (log: Omit<AuditLog, 'id'>) => {
     const newLog: AuditLog = { ...log, id: `log-${Date.now()}` };
     setAuditLogs(prev => [newLog, ...prev]);
   };
-  
+
+  const addTransaction = (transaction: Omit<Transaction, 'id' | 'currency' | 'createdAt'> & { currency?: Transaction['currency'] }) => {
+    const newTransaction: Transaction = {
+      id: `tx-${Date.now()}`,
+      currency: transaction.currency ?? 'GBP',
+      createdAt: new Date().toISOString(),
+      ...transaction,
+    };
+    setTransactions(prev => [newTransaction, ...prev]);
+    return newTransaction;
+  };
+
+  const updateTransaction = (transactionId: string, updates: Partial<Transaction>) => {
+    setTransactions(prev => prev.map(tx => tx.id === transactionId ? { ...tx, ...updates } : tx));
+  };
+
+  const addBookingAlert = (targetCoachId: string, message: string) => {
+    if (!targetCoachId) return;
+    setBookingAlerts(prev => [{
+      id: `alert-${Date.now()}-${Math.random()}`,
+      timestamp: new Date().toISOString(),
+      coachId: targetCoachId,
+      message,
+    }, ...prev]);
+  };
+
+  const notifyCoachAndOwner = (coachId: string, message: string) => {
+    const ownerId = getOwnerId();
+    [coachId, ownerId].forEach(id => addBookingAlert(id, message));
+
+    const coach = coaches.find(c => c.id === coachId);
+    if (coach?.mobileNumber) {
+      sendWhatsAppNotification(coach.mobileNumber, message);
+    }
+    const owner = coaches.find(c => c.id === ownerId);
+    if (owner?.mobileNumber && owner.id !== coachId) {
+      sendWhatsAppNotification(owner.mobileNumber, message);
+    }
+  };
+
+  const bookCoachSlot = (slotId: string, member: Member, participantName: string) => {
+    const slot = coachSlots.find(s => s.id === slotId);
+    if (!slot) return;
+
+    const appointment: CoachAppointment = {
+      id: `appt-${Date.now()}`,
+      slotId,
+      memberId: member.id,
+      participantName,
+      status: 'CONFIRMED',
+      createdAt: new Date().toISOString(),
+    };
+
+    setCoachAppointments(prev => [appointment, ...prev]);
+
+    addTransaction({
+      memberId: member.id,
+      coachId: slot.coachId,
+      slotId,
+      amount: slot.price,
+      source: slot.type === SlotType.PRIVATE ? TransactionSource.PRIVATE_SESSION : TransactionSource.GROUP_SESSION,
+      status: TransactionStatus.PAID,
+      description: slot.title,
+      settledAt: new Date().toISOString(),
+    });
+
+    addAuditLog({
+      timestamp: new Date().toISOString(),
+      actorId: member.id,
+      action: 'MEMBER_BOOKED_CLASS',
+      details: `${member.name} scheduled ${slot.title} with ${coaches.find(c => c.id === slot.coachId)?.name ?? 'coach'}.`,
+    });
+
+    const message = `Client: ${participantName} booked ${slot.title} on ${new Date(slot.start).toLocaleString()}. Please confirm.`;
+    notifyCoachAndOwner(slot.coachId, message);
+  };
+
+  const addGuestBooking = (entry: Omit<GuestBooking, 'id'>) => {
+    const booking: GuestBooking = {
+      id: `guest-${Date.now()}`,
+      ...entry,
+    };
+    setGuestBookings(prev => [booking, ...prev]);
+    if (entry.referenceId) {
+      if (entry.serviceType === 'CLASS') {
+        const gymClass = classes.find(cls => cls.id === entry.referenceId);
+        if (gymClass) {
+          const message = `Client: ${entry.participantName} booked ${gymClass.name} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
+          notifyCoachAndOwner(gymClass.coachId, message);
+        }
+      } else {
+        const slot = coachSlots.find(slot => slot.id === entry.referenceId);
+        if (slot) {
+          const message = `Client: ${entry.participantName} booked ${slot.title} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
+          notifyCoachAndOwner(slot.coachId, message);
+        }
+      }
+    }
+  };
   // --- Notification and Class Transfer Logic ---
   
   const createClassTransferRequest = (classId: string, targetCoachId: string, note: string, actor: AppUser) => {
@@ -188,6 +301,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             action,
             details,
         });
+
+        addTransaction({
+            memberId: booking.memberId,
+            coachId: gymClass.coachId,
+            bookingId: newBooking.id,
+            amount: gymClass.price,
+            source: TransactionSource.CLASS,
+            status: booking.paid ? TransactionStatus.PAID : TransactionStatus.PENDING,
+            description: `${gymClass.name}`,
+            settledAt: booking.paid ? new Date().toISOString() : undefined,
+        });
+
+        const message = `Client: ${participant.name} booked ${gymClass.name} (${gymClass.day} ${gymClass.time}). Please confirm.`;
+        notifyCoachAndOwner(gymClass.coachId, message);
     }
 
     setBookings(prev => [...prev, newBooking]);
@@ -207,6 +334,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 details: `${actor.name} removed ${participant.name} from ${gymClass.name}.`,
             });
         }
+
+        setTransactions(prev => prev.map(tx => 
+            tx.bookingId === bookingId 
+                ? { ...tx, status: TransactionStatus.REFUNDED, settledAt: new Date().toISOString() }
+                : tx
+        ));
     }
 
     setBookings(prev => prev.filter(b => b.id !== bookingId));
@@ -339,11 +472,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         notes: paid ? 'Payment confirmed via Stripe' : 'Charge raised - awaiting Stripe payment',
     };
     setGymAccessLogs(prev => [newLog, ...prev]);
+
+    addTransaction({
+      memberId,
+      amount,
+      source: TransactionSource.GYM_PASS,
+      status: paid ? TransactionStatus.PAID : TransactionStatus.PENDING,
+      description: 'Gym-only access',
+      settledAt: paid ? new Date().toISOString() : undefined,
+    });
   };
 
 
   return (
-    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass }}>
+    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking }}>
       {children}
     </DataContext.Provider>
   );

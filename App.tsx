@@ -7,10 +7,12 @@ import Footer from './components/layout/Footer';
 import MainContent from './components/MainContent';
 import LoginModal from './components/auth/LoginModal';
 import RegisterModal from './components/auth/RegisterModal';
+import BookingWizard from './components/bookings/BookingWizard';
 
 const App: React.FC = () => {
   const [isLoginOpen, setLoginOpen] = useState(false);
   const [isRegisterOpen, setRegisterOpen] = useState(false);
+  const isBookingPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/book');
 
   const handleSwitchToRegister = () => {
     setLoginOpen(false);
@@ -31,7 +33,11 @@ const App: React.FC = () => {
             onRegisterClick={() => setRegisterOpen(true)}
           />
           <main className="flex-grow container mx-auto px-4 py-8">
-            <MainContent onRegisterClick={() => setRegisterOpen(true)} />
+            {isBookingPage ? (
+              <BookingWizard />
+            ) : (
+              <MainContent onRegisterClick={() => setRegisterOpen(true)} />
+            )}
           </main>
           <Footer />
         </div>

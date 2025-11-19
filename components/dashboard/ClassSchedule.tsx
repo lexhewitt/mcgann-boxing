@@ -146,14 +146,22 @@ const ClassSchedule: React.FC = () => {
 
   return (
     <>
-    <div className="overflow-x-auto">
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-1 min-w-[800px] md:min-w-full">
-        {daysOfWeek.map(day => (
-          <div key={day} className="bg-brand-dark rounded-lg p-2">
-            <h3 className="font-bold text-center text-brand-red border-b border-gray-700 pb-2 mb-2">{day}</h3>
-            <div className="space-y-1">
-              {classes
-                .filter(c => c.day === day)
+    <div className="bg-brand-gray p-6 rounded-lg space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-2xl font-semibold text-white">Book a Class</h2>
+          <p className="text-sm text-gray-400">Browse the studio timetable and reserve your spot.</p>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 min-w-[900px]">
+          {daysOfWeek.map(day => (
+            <div key={day} className="bg-black/30 rounded-2xl p-3 border border-gray-700 shadow-lg">
+              <h3 className="font-semibold text-center text-white mb-3 uppercase tracking-wide">{day}</h3>
+              <div className="space-y-3">
+                {classes
+                  .filter(c => c.day === day)
                 .sort((a,b) => a.time.localeCompare(b.time))
                 .map(cls => {
                     const coach = coaches.find(c => c.id === cls.coachId);
@@ -176,7 +184,9 @@ const ClassSchedule: React.FC = () => {
                     return (
                         <div
                             key={cls.id}
-                            className={`group bg-brand-gray p-3 rounded-lg shadow-md flex flex-col border border-gray-700/50 min-h-40 ${isBookable ? 'hover:shadow-lg hover:shadow-brand-red/20 hover:border-brand-red/50 hover:-translate-y-1 transition-all duration-300 ease-in-out' : 'opacity-70'}`}
+                            className={`group bg-white/5 p-4 rounded-xl flex flex-col border border-gray-700/50 min-h-44 transition-all duration-200 ${
+                              isBookable ? 'hover:border-brand-red/60 hover:bg-white/10 hover:-translate-y-1' : 'opacity-60'
+                            }`}
                         >
                             <div className="flex-grow">
                                 <p className="font-bold text-white text-sm">{cls.name}</p>
@@ -196,19 +206,20 @@ const ClassSchedule: React.FC = () => {
                                 )}
                             </div>
                             <Button
-                                onClick={() => handleBookClick(cls.id)}
-                                disabled={!isBookable}
-                                className={`w-full mt-2 text-sm py-2 ${isBookable ? 'group-hover:bg-red-700' : ''}`}
-                                title={!availabilityCheck.isAvailable ? availabilityCheck.reason : spotsLeft <= 0 ? 'This class is full.' : `Book ${cls.name}`}
+                              onClick={() => handleBookClick(cls.id)}
+                              disabled={!isBookable}
+                              className="w-full mt-3"
+                              title={!availabilityCheck.isAvailable ? availabilityCheck.reason : spotsLeft <= 0 ? 'This class is full.' : `Book ${cls.name}`}
                             >
-                                Book (£{cls.price.toFixed(2)})
+                              Book (£{cls.price.toFixed(2)})
                             </Button>
                         </div>
                     );
                 })}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
      {showBookingModal && classToBook && (

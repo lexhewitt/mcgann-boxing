@@ -9,6 +9,7 @@ import AddFamilyMemberModal from './AddFamilyMemberModal';
 import { calculateAge } from '../../utils/helpers';
 import GymAccess from './GymAccess';
 import MemberFinancialSummary from './MemberFinancialSummary';
+import CoachScheduler from '../scheduling/CoachScheduler';
 
 const HealthAndSafetyNotice: React.FC = () => (
     <div className="bg-yellow-900/20 border-l-4 border-yellow-500 text-yellow-300 p-4 rounded-lg my-8 lg:col-span-3">
@@ -35,7 +36,7 @@ const HealthAndSafetyNotice: React.FC = () => (
 const MemberDashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
     // FIX: Destructured 'members' from useData to make it available in the component scope.
-    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, gymAccessLogs } = useData();
+    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, transactions } = useData();
     const [isEditing, setIsEditing] = useState(false);
     const [isAddFamilyMemberOpen, setAddFamilyMemberOpen] = useState(false);
     
@@ -83,14 +84,13 @@ const MemberDashboard: React.FC = () => {
         <div className="space-y-8">
         <MemberFinancialSummary
             member={currentUser as Member}
-            bookings={bookings}
-            classes={classes}
-            familyMembers={familyMembers}
-            gymAccessLogs={gymAccessLogs}
+            transactions={transactions}
+            embedded
         />
         <HealthAndSafetyNotice />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
+                <CoachScheduler />
                 <div>
                     <h2 className="text-2xl font-semibold text-white mb-4">Book a Class</h2>
                     <ClassSchedule />

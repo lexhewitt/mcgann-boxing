@@ -38,18 +38,22 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
   const stripe = new Stripe(secretKey);
   
   try {
-    const { className, classId, price, participantId, memberId } = req.body;
+    const { className, classId, price, participantId, memberId, slotId, slotTitle, participantName, guestBooking, successPath } = req.body;
 
-    if (!className || !classId || price === undefined || !participantId || !memberId) {
+    if (price === undefined || (!memberId && !guestBooking)) {
       return res.status(400).json({ error: 'Missing required session parameters.' });
     }
 
     const priceInPence = Math.round(price * 100);
     
-    // Construct base URL correctly, even when behind a proxy like on Cloud Run
     const host = req.get('host');
     const protocol = req.get('x-forwarded-proto') || req.protocol;
-    const baseUrl = `${protocol}://${host}`;
+    const derivedBase = `${protocol}://${host}`;
+    const baseUrl = process.env.FRONTEND_URL || derivedBase.replace(':8080', ':3000');
+    const redirectPath = successPath || '';
+
+    const displayName = className || slotTitle || 'Fleetwood Boxing Session';
+    const description = className ? 'Fleetwood Boxing Gym Class Booking' : 'Private/Group session booking';
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -57,18 +61,17 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
         price_data: {
           currency: 'gbp',
           product_data: { 
-            name: className,
-            description: 'Fleetwood Boxing Gym Class Booking',
+            name: displayName,
+            description,
            },
           unit_amount: priceInPence,
         },
         quantity: 1,
       }],
       mode: 'payment',
-      // The frontend looks for this query parameter to finalize the booking
-      success_url: `${baseUrl}?stripe_success=true`,
-      cancel_url: baseUrl,
-      metadata: { classId, participantId, memberId },
+      success_url: `${baseUrl}${redirectPath}?stripe_success=true`,
+      cancel_url: `${baseUrl}${redirectPath}`,
+      metadata: { classId: classId || '', participantId: participantId || '', participantName: participantName || '', memberId: memberId || '', slotId: slotId || '', guestBooking: guestBooking ? JSON.stringify(guestBooking) : '' },
     });
 
     res.status(200).json({ id: session.id });

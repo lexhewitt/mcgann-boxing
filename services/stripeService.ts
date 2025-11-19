@@ -1,4 +1,4 @@
-import { GymClass } from '../types';
+import { CoachSlot, GymClass } from '../types';
 
 // Define a type for the Stripe.js object that will be available on the window
 // This is a simplified version of the actual type from @stripe/stripe-js
@@ -105,6 +105,110 @@ export const handleStripeCheckout = async (
     // This part is not normally reached, as the user is redirected away.
     return { success: true };
 
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred.' };
+  }
+};
+
+interface GuestCheckoutPayload {
+  price: number;
+  className?: string;
+  classId?: string;
+  slotTitle?: string;
+  slotId?: string;
+  guestBooking: {
+    participantName: string;
+    participantDob?: string;
+    contactName: string;
+    contactEmail: string;
+    contactPhone: string;
+  };
+  successPath?: string;
+}
+
+export const handleGuestCheckout = async (payload: GuestCheckoutPayload) => {
+  const stripe = await getStripe();
+  if (!stripe) {
+    return { success: false, error: 'Stripe could not be initialized. Please check the server configuration and network connection.' };
+  }
+
+  try {
+    const response = await fetch('/server-api/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        price: payload.price,
+        className: payload.className,
+        classId: payload.classId,
+        slotTitle: payload.slotTitle,
+        slotId: payload.slotId,
+        guestBooking: payload.guestBooking,
+        successPath: payload.successPath || '/book',
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.error || 'Failed to create payment session.');
+    }
+
+    const session = await response.json();
+    const result = await stripe.redirectToCheckout({ sessionId: session.id });
+    if (result.error) {
+      console.error(result.error.message);
+      return { success: false, error: result.error.message };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Stripe checkout error:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred.' };
+  }
+};
+
+export const handleCoachSlotCheckout = async (
+  slot: CoachSlot,
+  memberId: string,
+  participantName: string
+): Promise<{ success: boolean; error?: string }> => {
+  const stripe = await getStripe();
+
+  if (!stripe) {
+    return { success: false, error: 'Stripe could not be initialized. Please check the server configuration and network connection.' };
+  }
+
+  try {
+    const response = await fetch('/server-api/create-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        slotId: slot.id,
+        slotTitle: slot.title,
+        price: slot.price,
+        memberId,
+        participantName,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.error || 'Failed to create checkout session.');
+    }
+
+    const session = await response.json();
+
+    const result = await stripe.redirectToCheckout({
+      sessionId: session.id,
+    });
+
+    if (result.error) {
+      console.error(result.error.message);
+      return { success: false, error: result.error.message };
+    }
+
+    return { success: true };
   } catch (error) {
     console.error('Stripe checkout error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred.' };

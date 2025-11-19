@@ -121,3 +121,91 @@ export interface GymAccessLog {
     paid: boolean;
     notes?: string;
 }
+
+export enum SlotType {
+  PRIVATE = 'PRIVATE',
+  GROUP = 'GROUP'
+}
+
+export interface CoachSlot {
+  id: string;
+  coachId: string;
+  type: SlotType;
+  title: string;
+  description?: string;
+  start: string; // ISO string
+  end: string;   // ISO string
+  capacity: number;
+  price: number;
+  location?: string;
+}
+
+export type AppointmentStatus = 'CONFIRMED' | 'CANCELED';
+
+export interface CoachAppointment {
+  id: string;
+  slotId: string;
+  memberId: string;
+  participantName: string;
+  status: AppointmentStatus;
+  createdAt: string;
+}
+
+export interface GuestBookingRequest {
+  participantName: string;
+  participantDob?: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+  classId?: string;
+  slotId?: string;
+}
+
+export interface GuestBooking {
+  id: string;
+  serviceType: 'CLASS' | 'PRIVATE';
+  referenceId: string;
+  title: string;
+  date: string;
+  participantName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone: string;
+}
+
+export enum TransactionStatus {
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  REFUNDED = 'REFUNDED'
+}
+
+export enum TransactionSource {
+  CLASS = 'CLASS',
+  PRIVATE_SESSION = 'PRIVATE_SESSION',
+  GROUP_SESSION = 'GROUP_SESSION',
+  GYM_PASS = 'GYM_PASS',
+  MANUAL = 'MANUAL'
+}
+
+export interface Transaction {
+  id: string;
+  memberId: string;
+  coachId?: string;
+  bookingId?: string;
+  slotId?: string;
+  amount: number;
+  currency: 'GBP';
+  source: TransactionSource;
+  status: TransactionStatus;
+  description?: string;
+  stripeSessionId?: string;
+  createdAt: string;
+  settledAt?: string;
+}
+
+export interface BookingAlert {
+  id: string;
+  timestamp: string;
+  coachId: string;
+  message: string;
+}

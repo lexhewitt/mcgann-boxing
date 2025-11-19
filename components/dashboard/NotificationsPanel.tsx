@@ -9,7 +9,7 @@ interface NotificationsPanelProps {
 }
 
 const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
-    const { notifications, classes, coaches, acceptClassTransfer, cancelClassTransferRequest } = useData();
+    const { notifications, bookingAlerts, classes, coaches, acceptClassTransfer, cancelClassTransferRequest } = useData();
 
     if (!user || (user.role !== UserRole.ADMIN && user.role !== UserRole.COACH)) {
         return null;
@@ -102,9 +102,28 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
         </div>
     );
 
+    const bookingSection = () => {
+        const relevant = user.role === UserRole.ADMIN ? bookingAlerts : bookingAlerts.filter(alert => alert.coachId === user.id);
+        if (relevant.length === 0) return null;
+        return (
+            <div className="mb-8">
+                <h3 className="text-xl font-bold text-white mb-4 pb-2 border-b border-gray-700">Booking Notifications</h3>
+                <div className="space-y-3">
+                    {relevant.map(alert => (
+                        <div key={alert.id} className="bg-brand-dark p-3 rounded-md">
+                            <p className="text-white">{alert.message}</p>
+                            <p className="text-xs text-gray-400 mt-1">{new Date(alert.timestamp).toLocaleString()}</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div>
             <h2 className="text-2xl font-bold text-white mb-6">Notifications</h2>
+            {bookingSection()}
             {user.role === UserRole.ADMIN ? (
                 renderSection("All Class Transfer Requests", notifications)
             ) : (

@@ -256,7 +256,7 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
 
 
 const MemberManagement: React.FC = () => {
-  const { members, deleteMember, bookings, classes, familyMembers, gymAccessLogs } = useData();
+  const { members, deleteMember, bookings, classes, familyMembers, transactions } = useData();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
@@ -387,10 +387,7 @@ const MemberManagement: React.FC = () => {
         <div className="mt-8">
             <MemberFinancialSummary
                 member={memberToViewFinancials}
-                bookings={bookings}
-                classes={classes}
-                familyMembers={familyMembers}
-                gymAccessLogs={gymAccessLogs}
+                transactions={transactions}
                 onClose={() => setMemberToViewFinancials(null)}
             />
         </div>

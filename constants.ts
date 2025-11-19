@@ -1,4 +1,4 @@
-import { Coach, GymClass, Member, UserRole, Booking, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification } from './types';
+import { Coach, GymClass, Member, UserRole, Booking, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, Transaction, CoachSlot, SlotType, CoachAppointment } from './types';
 
 export const COACHES: Coach[] = [
   { id: 'c1', name: 'Sean McGann', email: 'sean@fleetwoodboxing.co.uk', role: UserRole.ADMIN, level: 'Head Coach, Level 3', bio: 'With over 20 years of experience, Sean is the heart and soul of Fleetwood Boxing Gym.', imageUrl: 'https://picsum.photos/seed/sean/400/400', mobileNumber: '07111222333', bankDetails: '10-20-30 12345678' },
@@ -103,3 +103,63 @@ export const INITIAL_BOOKINGS: Booking[] = [
 export const INITIAL_NOTIFICATIONS: ClassTransferNotification[] = [];
 
 export const GYM_ACCESS_LOGS: GymAccessLog[] = [];
+
+export const INITIAL_TRANSACTIONS: Transaction[] = [];
+
+const daysFromNow = (days: number, hour: number, minute: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  date.setHours(hour, minute, 0, 0);
+  return date.toISOString();
+};
+
+export const COACH_SLOTS: CoachSlot[] = [
+  {
+    id: 'slot-sean-1',
+    coachId: 'c1',
+    type: SlotType.PRIVATE,
+    title: '1:1 With Sean',
+    description: 'Technique tune-up focused on fundamentals',
+    start: daysFromNow(2, 10, 0),
+    end: daysFromNow(2, 11, 0),
+    capacity: 1,
+    price: 45,
+    location: 'Ring 1',
+  },
+  {
+    id: 'slot-sean-2',
+    coachId: 'c1',
+    type: SlotType.PRIVATE,
+    title: '1:1 With Sean',
+    start: daysFromNow(4, 18, 30),
+    end: daysFromNow(4, 19, 30),
+    capacity: 1,
+    price: 45,
+    location: 'Technique Studio',
+  },
+  {
+    id: 'slot-drew-group',
+    coachId: 'c2',
+    type: SlotType.GROUP,
+    title: 'Small-Group Conditioning',
+    description: 'Sweat-focused conditioning for up to four boxers',
+    start: daysFromNow(3, 17, 0),
+    end: daysFromNow(3, 18, 0),
+    capacity: 4,
+    price: 25,
+    location: 'Conditioning Area',
+  },
+  {
+    id: 'slot-elle-1',
+    coachId: 'c3',
+    type: SlotType.PRIVATE,
+    title: 'Women’s 1:1 Session',
+    start: daysFromNow(5, 9, 0),
+    end: daysFromNow(5, 10, 0),
+    capacity: 1,
+    price: 40,
+    location: 'Studio 2',
+  },
+];
+
+export const INITIAL_COACH_APPOINTMENTS: CoachAppointment[] = [];
