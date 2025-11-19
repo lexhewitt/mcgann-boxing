@@ -50,6 +50,8 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
         const targetCoach = coaches.find(c => c.id === notification.targetCoachId);
 
         if (!gymClass || !requestingCoach || !targetCoach || !user) return null;
+        const isPendingForUser = notification.status === NotificationStatus.PENDING &&
+          (user.role === UserRole.ADMIN || notification.targetCoachId === user.id);
 
         let message = '';
         if (user.role === UserRole.ADMIN && user.id !== requestingCoach.id && user.id !== targetCoach.id) {
@@ -67,7 +69,14 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
              <div className="bg-brand-dark p-3 rounded-md flex flex-col items-start gap-2">
                 <div className="w-full flex justify-between items-start gap-4">
                     <div>
-                        <p className="text-white">{message}</p>
+                        <p className="text-white flex items-center gap-2">
+                            {message}
+                            {isPendingForUser && (
+                                <span className="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-brand-red text-white">
+                                    New
+                                </span>
+                            )}
+                        </p>
                         <p className="text-xs text-gray-400 mt-1">{gymClass.day}, {gymClass.time} &middot; Requested on {new Date(notification.timestamp).toLocaleDateString()}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
@@ -116,7 +125,14 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
                                 <div className="flex justify-between items-start gap-4">
                                     <div className="text-white">
                                         <p className="font-semibold">{alert.serviceType === 'PRIVATE' ? 'Private Session Booking' : 'Class Booking'}</p>
-                                        <p className="text-sm text-gray-300">{alert.message}</p>
+                                        <p className="text-sm text-gray-300 flex items-center gap-2">
+                                            {alert.message}
+                                            {alert.status === 'PENDING' && (
+                                                <span className="px-2 py-0.5 text-[10px] uppercase font-bold rounded bg-brand-red text-white">
+                                                    New
+                                                </span>
+                                            )}
+                                        </p>
                                         {alert.participantName && <p className="text-xs text-gray-400 mt-1">Participant: {alert.participantName}</p>}
                                         {typeof alert.amount === 'number' && <p className="text-xs text-gray-400">Amount: £{alert.amount.toFixed(2)}</p>}
                                         {user.role === UserRole.ADMIN && coach && (

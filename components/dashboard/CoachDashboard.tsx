@@ -19,7 +19,7 @@ interface CoachDashboardProps {
 
 const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     const { currentUser } = useAuth();
-    const { classes, bookings, notifications } = useData();
+    const { classes, bookings, notifications, bookingAlerts } = useData();
     const [selectedClass, setSelectedClass] = useState<GymClass | null>(null);
     const [activeTab, setActiveTab] = useState<CoachTab>('classes');
 
@@ -28,9 +28,16 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     if (!coachForDashboard) return null;
 
     const coachClasses = classes.filter(c => c.coachId === coachForDashboard.id);
-    const pendingNotificationsCount = notifications.filter(
-        n => n.targetCoachId === coachForDashboard.id && n.status === NotificationStatus.PENDING
+    const pendingTransferCount = notifications.filter(
+        n => (coachForDashboard.role === UserRole.ADMIN ? true : n.targetCoachId === coachForDashboard.id) && n.status === NotificationStatus.PENDING
     ).length;
+    const pendingBookingAlertCount = bookingAlerts.filter(alert => {
+        if (coachForDashboard.role === UserRole.ADMIN) {
+            return alert.status === 'PENDING';
+        }
+        return alert.status === 'PENDING' && alert.coachId === coachForDashboard.id;
+    }).length;
+    const pendingNotificationsCount = pendingTransferCount + pendingBookingAlertCount;
 
     const TabButton:React.FC<{tabName: CoachTab, label: string, count?: number}> = ({tabName, label, count}) => (
       <button

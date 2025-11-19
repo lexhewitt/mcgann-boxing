@@ -8,7 +8,7 @@ import ActivityLog from './ActivityLog';
 import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
 import CoachFinancialSummary from './CoachFinancialSummary';
-import { Coach } from '../../types';
+import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
@@ -22,7 +22,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [financialCoach, setFinancialCoach] = useState<Coach | null>(null);
   const { currentUser } = useAuth();
-  const { bookings, classes, members } = useData();
+  const { bookings, classes, members, notifications, bookingAlerts } = useData();
+  const pendingClassTransfers = notifications.filter(n => n.status === NotificationStatus.PENDING).length;
+  const pendingBookingAlerts = bookingAlerts.filter(alert => alert.status === 'PENDING').length;
+  const totalPendingNotifications = pendingClassTransfers + pendingBookingAlerts;
 
   const renderContent = () => {
     // Add a guard clause for safety
@@ -61,12 +64,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
     }
   };
   
-  const TabButton:React.FC<{tabName: AdminTab, label: string}> = ({tabName, label}) => (
+  const TabButton:React.FC<{tabName: AdminTab, label: string, count?: number}> = ({tabName, label, count}) => (
       <button
         onClick={() => setActiveTab(tabName)}
-        className={`px-4 py-2 font-semibold rounded-t-lg transition-colors ${activeTab === tabName ? 'bg-brand-gray text-white' : 'bg-brand-dark text-gray-400 hover:bg-gray-800'}`}
+        className={`px-4 py-2 font-semibold rounded-t-lg transition-colors flex items-center gap-2 ${activeTab === tabName ? 'bg-brand-gray text-white' : 'bg-brand-dark text-gray-400 hover:bg-gray-800'}`}
       >
           {label}
+          {count && count > 0 && (
+            <span className="bg-brand-red text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+              {count > 9 ? '9+' : count}
+            </span>
+          )}
       </button>
   )
 
@@ -80,7 +88,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='classes' label="Manage Classes" />
             <TabButton tabName='calendar' label="Calendar" />
             <TabButton tabName='financials' label="Financials" />
-            <TabButton tabName='notifications' label="Notifications" />
+            <TabButton tabName='notifications' label="Notifications" count={totalPendingNotifications} />
             <TabButton tabName='activity' label="Activity Log" />
         </div>
         <div className="bg-brand-gray p-6 rounded-b-lg">
