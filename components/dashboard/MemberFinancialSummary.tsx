@@ -32,7 +32,10 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
   );
 
   const outstanding = memberTransactions.filter(tx => tx.status === TransactionStatus.PENDING);
-  const settled = memberTransactions.filter(tx => tx.status === TransactionStatus.PAID);
+  const pendingConfirmation = memberTransactions.filter(tx => tx.confirmationStatus === 'PENDING');
+  const settled = memberTransactions.filter(
+    tx => tx.status === TransactionStatus.PAID && tx.confirmationStatus !== 'PENDING',
+  );
 
   const startOfMonth = useMemo(() => {
     const today = new Date();
@@ -64,10 +67,11 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
           </button>
         )}
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <StatCard title="Outstanding Balance" value={`£${outstandingTotal.toFixed(2)}`} />
         <StatCard title="Paid This Month" value={`£${paidThisMonth.toFixed(2)}`} />
         <StatCard title="Lifetime Spend" value={`£${lifetimeSpend.toFixed(2)}`} />
+        <StatCard title="Awaiting Confirmation" value={`£${pendingConfirmation.reduce((sum, tx) => sum + tx.amount, 0).toFixed(2)}`} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-brand-dark p-5 rounded-lg">
@@ -105,6 +109,7 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
                   <tr>
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Description</th>
+                    <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3 text-right">Amount</th>
                   </tr>
                 </thead>
@@ -118,6 +123,11 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
                         </span>
                         {tx.description || 'Payment'}
                       </td>
+                      <td className="py-2 pr-3">
+                        <span className="px-2 py-0.5 rounded bg-green-600 text-xs text-white uppercase tracking-wide">
+                          Confirmed
+                        </span>
+                      </td>
                       <td className="py-2 pr-3 text-right font-semibold">£{tx.amount.toFixed(2)}</td>
                     </tr>
                   ))}
@@ -129,6 +139,26 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
           </div>
         </div>
       </div>
+      {pendingConfirmation.length > 0 && (
+        <div className="bg-brand-dark p-5 rounded-lg">
+          <h3 className="text-lg font-semibold text-white mb-3">Awaiting Coach Confirmation</h3>
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+            {pendingConfirmation.map(tx => (
+              <div key={tx.id} className="bg-brand-gray p-3 rounded-md flex justify-between gap-4">
+                <div>
+                  <p className="font-semibold">{tx.description || sourceLabel[tx.source]}</p>
+                  <p className="text-xs text-gray-400">
+                    Paid on {new Date(tx.createdAt).toLocaleString()} · Waiting for coach to confirm
+                  </p>
+                </div>
+                <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-500 text-black self-start">
+                  Pending
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

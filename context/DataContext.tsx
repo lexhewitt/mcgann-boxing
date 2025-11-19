@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole } from '../types';
+import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole, ConfirmationStatus } from '../types';
 import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS, INITIAL_TRANSACTIONS, COACH_SLOTS, INITIAL_COACH_APPOINTMENTS } from '../constants';
 import { sendWhatsAppNotification } from '../services/notificationService';
 
@@ -79,6 +79,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       id: `tx-${Date.now()}`,
       currency: transaction.currency ?? 'GBP',
       createdAt: new Date().toISOString(),
+      confirmationStatus: transaction.confirmationStatus ?? 'CONFIRMED',
       ...transaction,
     };
     setTransactions(prev => [newTransaction, ...prev]);
@@ -111,16 +112,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const acknowledgeBookingAlert = (alertId: string, actor?: AppUser) => {
-    setBookingAlerts(prev => prev.map(alert => 
-      alert.id === alertId 
-        ? { 
-            ...alert, 
-            status: 'ACKNOWLEDGED',
-            confirmedBy: actor?.name ?? alert.confirmedBy,
-            confirmedAt: new Date().toISOString(),
-          }
-        : alert
-    ));
+    setBookingAlerts(prev => prev.map(alert => {
+      if (alert.id !== alertId) return alert;
+      if (alert.transactionId) {
+        updateTransaction(alert.transactionId, {
+          confirmationStatus: 'CONFIRMED',
+          status: TransactionStatus.PAID,
+        });
+      }
+      return {
+        ...alert,
+        status: 'ACKNOWLEDGED',
+        confirmedBy: actor?.name ?? alert.confirmedBy,
+        confirmedAt: new Date().toISOString(),
+      };
+    }));
   };
 
   const notifyCoachAndOwner = (
@@ -156,7 +162,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     setCoachAppointments(prev => [appointment, ...prev]);
 
-    addTransaction({
+    const transaction = addTransaction({
       memberId: member.id,
       coachId: slot.coachId,
       slotId,
@@ -165,6 +171,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       status: TransactionStatus.PAID,
       description: slot.title,
       settledAt: new Date().toISOString(),
+      confirmationStatus: 'PENDING',
     });
 
     addAuditLog({
@@ -180,6 +187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       referenceId: slot.id,
       participantName,
       amount: slot.price,
+      transactionId: transaction.id,
     });
   };
 
@@ -346,7 +354,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             details,
         });
 
-        addTransaction({
+        const needsCoachConfirmation = booking.paid && actor.role === UserRole.MEMBER;
+
+        const transaction = addTransaction({
             memberId: booking.memberId,
             coachId: gymClass.coachId,
             bookingId: newBooking.id,
@@ -355,6 +365,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             status: booking.paid ? TransactionStatus.PAID : TransactionStatus.PENDING,
             description: `${gymClass.name}`,
             settledAt: booking.paid ? new Date().toISOString() : undefined,
+            confirmationStatus: needsCoachConfirmation ? 'PENDING' : 'CONFIRMED',
         });
 
         const message = `Client: ${participant.name} booked ${gymClass.name} (${gymClass.day} ${gymClass.time}). Please confirm.`;
@@ -363,6 +374,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           referenceId: gymClass.id,
           participantName: participant.name,
           amount: gymClass.price,
+          transactionId: transaction.id,
         });
     }
 

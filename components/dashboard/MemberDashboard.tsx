@@ -46,6 +46,10 @@ const MemberDashboard: React.FC = () => {
 
     const memberBookings = bookings.filter(b => b.memberId === currentUser.id);
     const paymentHistory = bookings.filter(b => b.memberId === currentUser.id && b.paid);
+    const memberTransactions = useMemo(
+        () => transactions.filter(tx => tx.memberId === currentUser.id),
+        [transactions, currentUser.id],
+    );
 
     const memberFamily = useMemo(() => 
         familyMembers.filter(fm => fm.parentId === currentUser.id), 
@@ -103,13 +107,25 @@ const MemberDashboard: React.FC = () => {
                                 {memberBookings.map(booking => {
                                     const cls = classes.find(c => c.id === booking.classId);
                                     const participant = allParticipants.find(p => p.id === booking.participantId);
+                                    const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
+                                    const confirmationStatus = bookingTransaction?.confirmationStatus;
+                                    const statusLabel = booking.paid
+                                        ? (confirmationStatus === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed')
+                                        : 'Unpaid';
+                                    const statusClass = !booking.paid
+                                        ? 'bg-yellow-500 text-black'
+                                        : confirmationStatus === 'PENDING'
+                                            ? 'bg-yellow-600 text-black'
+                                            : 'bg-green-600';
                                     return (
                                         <li key={booking.id} className="flex justify-between items-center bg-brand-dark p-3 rounded">
                                             <div>
                                                 <p className="font-bold">{cls?.name}</p>
-                                                <p className="text-sm text-gray-400">{cls?.day} at {cls?.time} {booking.participantId !== currentUser.id && `(for ${participant?.name})`}</p>
+                                                <p className="text-sm text-gray-400">
+                                                    {cls?.day} at {cls?.time} {booking.participantId !== currentUser.id && `(for ${participant?.name})`}
+                                                </p>
                                             </div>
-                                            <span className={`px-2 py-1 text-xs font-bold rounded ${booking.paid ? 'bg-green-600' : 'bg-yellow-500'}`}>{booking.paid ? 'Paid' : 'Unpaid'}</span>
+                                            <span className={`px-2 py-1 text-xs font-bold rounded ${statusClass}`}>{statusLabel}</span>
                                         </li>
                                     );
                                 })}
@@ -126,6 +142,8 @@ const MemberDashboard: React.FC = () => {
                             <ul className="space-y-2">
                                 {paymentHistory.map(booking => {
                                     const cls = classes.find(c => c.id === booking.classId);
+                                    const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
+                                    const confirmationStatus = bookingTransaction?.confirmationStatus === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed';
                                     return (
                                         <li key={booking.id} className="flex justify-between items-center bg-brand-dark p-3 rounded">
                                             <div>
@@ -133,6 +151,7 @@ const MemberDashboard: React.FC = () => {
                                                 <p className="text-sm text-gray-400">
                                                     Paid on: {new Date(booking.bookingDate).toLocaleDateString()}
                                                 </p>
+                                                <p className="text-xs text-gray-500">{confirmationStatus}</p>
                                             </div>
                                             <span className="font-semibold text-green-400">
                                                 £{cls?.price?.toFixed(2) || 'N/A'}

@@ -59,6 +59,8 @@ export interface GymClass {
   originalCoachId?: string; // ID of the coach who this class was temporarily transferred from
 }
 
+export type ConfirmationStatus = 'PENDING' | 'CONFIRMED';
+
 export interface Booking {
   id:string;
   memberId: string;      // The account holder who made/paid for the booking
@@ -201,6 +203,7 @@ export interface Transaction {
   stripeSessionId?: string;
   createdAt: string;
   settledAt?: string;
+  confirmationStatus?: ConfirmationStatus;
 }
 
 export type BookingAlertStatus = 'PENDING' | 'ACKNOWLEDGED';
@@ -214,6 +217,7 @@ export interface BookingAlert {
   referenceId?: string;
   participantName?: string;
   amount?: number;
+  transactionId?: string;
   status: BookingAlertStatus;
   confirmedBy?: string;
   confirmedAt?: string;
