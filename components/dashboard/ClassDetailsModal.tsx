@@ -41,9 +41,9 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
   const isAuthorized = currentUser?.role === 'ADMIN' || currentUser?.id === gymClass.coachId;
   const isClassFull = totalConfirmedCount >= gymClass.capacity;
 
-  const handleRemove = (bookingId: string) => {
+  const handleRemove = async (bookingId: string) => {
     if (currentUser && window.confirm('Cancel this booking? Refunds are only issued 24 hours before the class.')) {
-      const result = cancelBooking(bookingId, currentUser, { allowLate: true });
+      const result = await cancelBooking(bookingId, currentUser, { allowLate: true });
       alert(result.message);
     }
   };
@@ -185,9 +185,9 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
 };
 
 export default ClassDetailsModal;
-  const handleCancelGuest = (guestId: string) => {
+  const handleCancelGuest = async (guestId: string) => {
     if (currentUser && window.confirm('Cancel this guest booking?')) {
-      const result = cancelGuestBooking(guestId, currentUser, { allowLate: true });
+      const result = await cancelGuestBooking(guestId, currentUser, { allowLate: true });
       alert(result.message);
     }
   };

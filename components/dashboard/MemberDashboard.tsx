@@ -96,13 +96,13 @@ const MemberDashboard: React.FC = () => {
         return new Date(sessionStart).getTime() - Date.now() >= cancellationWindowMs;
     };
 
-    const handleCancelClassBooking = (bookingId: string) => {
-        const result = cancelBooking(bookingId, currentUser);
+    const handleCancelClassBooking = async (bookingId: string) => {
+        const result = await cancelBooking(bookingId, currentUser);
         alert(result.message);
     };
 
-    const handleCancelSession = (appointmentId: string) => {
-        const result = cancelCoachAppointment(appointmentId, currentUser);
+    const handleCancelSession = async (appointmentId: string) => {
+        const result = await cancelCoachAppointment(appointmentId, currentUser);
         alert(result.message);
     };
 

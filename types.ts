@@ -66,6 +66,7 @@ export interface Booking {
   memberId: string;      // The account holder who made/paid for the booking
   participantId: string; // Who is attending (can be memberId or familyMemberId)
   classId: string;
+  sessionStart?: string;
   bookingDate: string;   // ISO string
   paid: boolean;
   attended?: boolean;

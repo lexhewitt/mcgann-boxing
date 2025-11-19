@@ -60,7 +60,8 @@ const getStripe = (): Promise<StripeJS | null> => {
 export const handleStripeCheckout = async (
   gymClass: GymClass, 
   participant: {id: string, name: string}, 
-  memberId: string
+  memberId: string,
+  options?: { onSessionCreated?: (sessionId: string) => void }
 ): Promise<{ success: boolean; error?: string }> => {
   const stripe = await getStripe();
 
@@ -90,6 +91,7 @@ export const handleStripeCheckout = async (
     }
 
     const session = await response.json();
+    options?.onSessionCreated?.(session.id);
 
     // Redirect the user to the Stripe-hosted checkout page
     const result = await stripe.redirectToCheckout({
@@ -169,7 +171,8 @@ export const handleGuestCheckout = async (payload: GuestCheckoutPayload) => {
 export const handleCoachSlotCheckout = async (
   slot: CoachSlot,
   memberId: string,
-  participantName: string
+  participantName: string,
+  options?: { onSessionCreated?: (sessionId: string) => void }
 ): Promise<{ success: boolean; error?: string }> => {
   const stripe = await getStripe();
 
@@ -198,6 +201,7 @@ export const handleCoachSlotCheckout = async (
     }
 
     const session = await response.json();
+    options?.onSessionCreated?.(session.id);
 
     const result = await stripe.redirectToCheckout({
       sessionId: session.id,

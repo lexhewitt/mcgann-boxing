@@ -28,8 +28,8 @@ interface DataContextType {
   deleteAvailabilitySlot: (slotId: string) => void;
   addUnavailableSlot: (slot: Omit<UnavailableSlot, 'id'>) => void;
   deleteUnavailableSlot: (slotId: string) => void;
-  addBooking: (booking: Omit<Booking, 'id' | 'bookingDate'>, actor: AppUser) => void;
-  deleteBooking: (bookingId: string, actor: AppUser) => void;
+  addBooking: (booking: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => void;
+  deleteBooking: (bookingId: string, actor: AppUser) => Promise<void>;
   updateBooking: (bookingId: string, newClassId: string, actor: AppUser) => void;
   toggleAttendance: (bookingId: string) => void;
   updateMember: (member: Member) => void;
@@ -45,11 +45,11 @@ interface DataContextType {
   deleteClass: (classId: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id' | 'currency' | 'createdAt'> & { currency?: Transaction['currency'] }) => Transaction;
   updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
-  bookCoachSlot: (slotId: string, member: Member, participantName: string) => void;
+  bookCoachSlot: (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => void;
   addGuestBooking: (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => void;
-  cancelBooking: (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => { success: boolean; message: string };
-  cancelCoachAppointment: (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => { success: boolean; message: string };
-  cancelGuestBooking: (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => { success: boolean; message: string };
+  cancelBooking: (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => Promise<{ success: boolean; message: string }>;
+  cancelCoachAppointment: (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => Promise<{ success: boolean; message: string }>;
+  cancelGuestBooking: (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => Promise<{ success: boolean; message: string }>;
   acknowledgeBookingAlert: (alertId: string, actor?: AppUser) => void;
 }
 
@@ -152,6 +152,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }));
   };
 
+  const processStripeRefund = async (sessionId: string) => {
+    try {
+      const response = await fetch('/server-api/refund-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.error || 'Failed to issue Stripe refund.');
+      }
+      return true;
+    } catch (error) {
+      console.error('Stripe refund error:', error);
+      return false;
+    }
+  };
+
   const notifyCoachAndOwner = (
     coachId: string, 
     message: string,
@@ -185,7 +205,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } : alert));
   };
 
-  const bookCoachSlot = (slotId: string, member: Member, participantName: string) => {
+  const bookCoachSlot = (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => {
     const slot = coachSlots.find(s => s.id === slotId);
     if (!slot) return;
 
@@ -210,6 +230,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       description: slot.title,
       settledAt: new Date().toISOString(),
       confirmationStatus: 'PENDING',
+      stripeSessionId,
     });
 
     addAuditLog({
@@ -266,7 +287,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const cancelBooking = (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
+  const cancelBooking = async (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
     const bookingToCancel = bookings.find(b => b.id === bookingId);
     if (!bookingToCancel) {
       return { success: false, message: 'Booking not found.' };
@@ -274,15 +295,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const gymClass = classes.find(c => c.id === bookingToCancel.classId);
     const participant = [...members, ...familyMembers].find(p => p.id === bookingToCancel.participantId);
     const sessionDate = bookingToCancel.sessionStart ? new Date(bookingToCancel.sessionStart) : null;
-    const refundEligible = isRefundEligible(sessionDate);
+    const refundEligible = bookingToCancel.paid && isRefundEligible(sessionDate);
     if (!refundEligible && !options?.allowLate) {
       return { success: false, message: 'This class starts within 24 hours. Please contact the gym to cancel.' };
     }
     const shouldRefund = options?.issueRefund ?? refundEligible;
 
+    const tx = transactions.find(tx => tx.bookingId === bookingId);
+    if (shouldRefund) {
+      if (tx?.stripeSessionId) {
+        const refundOk = await processStripeRefund(tx.stripeSessionId);
+        if (!refundOk) {
+          return { success: false, message: 'Unable to refund via Stripe. Please try again or refund manually.' };
+        }
+      } else {
+        return { success: false, message: 'Payment reference not found. Please refund manually in Stripe before canceling.' };
+      }
+    }
+
     setBookings(prev => prev.filter(b => b.id !== bookingId));
 
-    const tx = transactions.find(tx => tx.bookingId === bookingId);
     if (tx) {
       setTransactions(prev => prev.map(t => t.id === tx.id ? {
         ...t,
@@ -311,7 +343,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  const cancelCoachAppointment = (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
+  const cancelCoachAppointment = async (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
     const appointment = coachAppointments.find(appt => appt.id === appointmentId);
     if (!appointment) {
       return { success: false, message: 'Session not found.' };
@@ -326,9 +358,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     const shouldRefund = options?.issueRefund ?? refundEligible;
 
+    const tx = transactions.find(tx => tx.slotId === slot.id && tx.memberId === appointment.memberId);
+    if (shouldRefund) {
+      if (tx?.stripeSessionId) {
+        const refundOk = await processStripeRefund(tx.stripeSessionId);
+        if (!refundOk) {
+          return { success: false, message: 'Unable to refund via Stripe. Please try again or refund manually.' };
+        }
+      } else {
+        return { success: false, message: 'Payment reference not found. Please refund manually in Stripe before canceling.' };
+      }
+    }
+
     setCoachAppointments(prev => prev.filter(appt => appt.id !== appointmentId));
 
-    const tx = transactions.find(tx => tx.slotId === slot.id && tx.memberId === appointment.memberId);
     if (tx) {
       setTransactions(prev => prev.map(t => t.id === tx.id ? {
         ...t,
@@ -355,7 +398,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   };
 
-  const cancelGuestBooking = (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => {
+  const cancelGuestBooking = async (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => {
     const guestBooking = guestBookings.find(g => g.id === guestBookingId);
     if (!guestBooking) {
       return { success: false, message: 'Guest booking not found.' };
@@ -483,7 +526,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
 
-  const addBooking = (booking: Omit<Booking, 'id' | 'bookingDate'>, actor: AppUser) => {
+  const addBooking = (bookingInput: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => {
+    const { stripeSessionId, ...booking } = bookingInput;
     const newBooking: Booking = {
       ...booking,
       id: `b${Date.now()}`,
@@ -524,6 +568,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             description: `${gymClass.name}`,
             settledAt: booking.paid ? new Date().toISOString() : undefined,
             confirmationStatus: needsCoachConfirmation ? 'PENDING' : 'CONFIRMED',
+            stripeSessionId,
         });
 
         const message = `Client: ${participant.name} booked ${gymClass.name} (${gymClass.day} ${gymClass.time}). Please confirm.`;
@@ -539,8 +584,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setBookings(prev => [...prev, newBooking]);
   };
   
-  const deleteBooking = (bookingId: string, actor: AppUser) => {
-    cancelBooking(bookingId, actor, { allowLate: true, issueRefund: false });
+  const deleteBooking = async (bookingId: string, actor: AppUser) => {
+    await cancelBooking(bookingId, actor, { allowLate: true, issueRefund: false });
   };
 
   const updateBooking = (bookingId: string, newClassId: string, actor: AppUser) => {

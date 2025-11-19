@@ -95,7 +95,12 @@ const ClassSchedule: React.FC = () => {
         localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
         
         // Call the Stripe service, which will redirect the user.
-        const paymentResult = await handleStripeCheckout(classToBook, participant, currentUser.id);
+        const paymentResult = await handleStripeCheckout(classToBook, participant, currentUser.id, {
+          onSessionCreated: (sessionId) => {
+            pendingBooking.stripeSessionId = sessionId;
+            localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
+          },
+        });
 
         // This part is only reached if there's an error BEFORE the redirect.
         if (paymentResult.error) {

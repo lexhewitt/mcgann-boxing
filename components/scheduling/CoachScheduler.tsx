@@ -92,23 +92,26 @@ const CoachScheduler: React.FC = () => {
     setSubmitting(true);
     try {
       const slotCoach = coaches.find(c => c.id === activeSlot.coachId);
-      localStorage.setItem(
-        'pendingSlot',
-        JSON.stringify({
-          slotId: activeSlot.id,
-          memberId: member.id,
+      const pendingSlot = {
+        slotId: activeSlot.id,
+        memberId: member.id,
+        participantName,
+        summary: {
+          type: activeSlot.type === SlotType.PRIVATE ? 'PRIVATE' : 'GROUP',
+          title: activeSlot.title,
+          schedule: new Date(activeSlot.start).toLocaleString(),
+          coachName: slotCoach?.name,
           participantName,
-          summary: {
-            type: activeSlot.type === SlotType.PRIVATE ? 'PRIVATE' : 'GROUP',
-            title: activeSlot.title,
-            schedule: new Date(activeSlot.start).toLocaleString(),
-            coachName: slotCoach?.name,
-            participantName,
-            price: activeSlot.price,
-          },
-        }),
-      );
-      const result = await handleCoachSlotCheckout(activeSlot, member.id, participantName);
+          price: activeSlot.price,
+        },
+      };
+      localStorage.setItem('pendingSlot', JSON.stringify(pendingSlot));
+      const result = await handleCoachSlotCheckout(activeSlot, member.id, participantName, {
+        onSessionCreated: (sessionId) => {
+          pendingSlot.stripeSessionId = sessionId;
+          localStorage.setItem('pendingSlot', JSON.stringify(pendingSlot));
+        },
+      });
       if (!result.success && result.error) {
         localStorage.removeItem('pendingSlot');
         alert(result.error);

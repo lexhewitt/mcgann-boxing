@@ -81,6 +81,31 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
   }
 });
 
+apiRouter.post('/refund-session', express.json(), async (req, res) => {
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  if (!secretKey) {
+    return res.status(500).json({ error: 'Stripe secret key is not configured.' });
+  }
+  const stripe = new Stripe(secretKey);
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId.' });
+  }
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session.payment_intent) {
+      return res.status(400).json({ error: 'Payment intent not found for this session.' });
+    }
+    await stripe.refunds.create({
+      payment_intent: typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent.id,
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error issuing Stripe refund:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to issue refund.' });
+  }
+});
+
 
 // --- Middleware & Route Registration ---
 

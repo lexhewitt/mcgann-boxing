@@ -18,6 +18,8 @@ interface PendingClassPayload {
   memberId: string;
   participantId: string;
   classId: string;
+  sessionStart?: string;
+  stripeSessionId?: string;
   summary?: ConfirmationSummary;
 }
 
@@ -25,6 +27,7 @@ interface PendingSlotPayload {
   slotId: string;
   memberId: string;
   participantName: string;
+  stripeSessionId?: string;
   summary?: ConfirmationSummary;
 }
 
@@ -67,6 +70,7 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
                         participantId: pendingBooking.participantId,
                         classId: pendingBooking.classId,
                         sessionStart: pendingBooking.sessionStart,
+                        stripeSessionId: pendingBooking.stripeSessionId,
                         paid: true, // Payment was successful
                     }, currentUser);
                     setConfirmation({
@@ -104,7 +108,7 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
                         localStorage.removeItem('pendingSlot');
                         return;
                     }
-                    bookCoachSlot(pendingSlot.slotId, memberRecord, pendingSlot.participantName || memberRecord.name);
+                    bookCoachSlot(pendingSlot.slotId, memberRecord, pendingSlot.participantName || memberRecord.name, pendingSlot.stripeSessionId);
                     setConfirmation({
                       heading: 'Thanks! Your private session request is in.',
                       message: 'Payment was successful. Sean or your coach will send a confirmation message shortly.',
