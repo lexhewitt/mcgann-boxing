@@ -66,6 +66,7 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
                         memberId: pendingBooking.memberId,
                         participantId: pendingBooking.participantId,
                         classId: pendingBooking.classId,
+                        sessionStart: pendingBooking.sessionStart,
                         paid: true, // Payment was successful
                     }, currentUser);
                     setConfirmation({

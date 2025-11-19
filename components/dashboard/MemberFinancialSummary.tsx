@@ -33,8 +33,9 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
 
   const outstanding = memberTransactions.filter(tx => tx.status === TransactionStatus.PENDING);
   const pendingConfirmation = memberTransactions.filter(tx => tx.confirmationStatus === 'PENDING');
+  const cancellations = memberTransactions.filter(tx => tx.confirmationStatus === 'CANCELED');
   const settled = memberTransactions.filter(
-    tx => tx.status === TransactionStatus.PAID && tx.confirmationStatus !== 'PENDING',
+    tx => tx.status === TransactionStatus.PAID && tx.confirmationStatus !== 'PENDING' && tx.confirmationStatus !== 'CANCELED',
   );
 
   const startOfMonth = useMemo(() => {
@@ -153,6 +154,26 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
                 </div>
                 <span className="px-2 py-1 rounded text-xs font-bold bg-yellow-500 text-black self-start">
                   Pending
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {cancellations.length > 0 && (
+        <div className="bg-brand-dark p-5 rounded-lg">
+          <h3 className="text-lg font-semibold text-white mb-3">Recent Cancellations</h3>
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-2">
+            {cancellations.map(tx => (
+              <div key={tx.id} className="bg-brand-gray p-3 rounded-md flex justify-between gap-4">
+                <div>
+                  <p className="font-semibold">{tx.description || sourceLabel[tx.source]}</p>
+                  <p className="text-xs text-gray-400">
+                    Canceled on {new Date(tx.createdAt).toLocaleString()}
+                  </p>
+                </div>
+                <span className={`px-2 py-1 rounded text-xs font-bold ${tx.status === TransactionStatus.REFUNDED ? 'bg-blue-600' : 'bg-gray-600'}`}>
+                  {tx.status === TransactionStatus.REFUNDED ? 'Refunded' : 'No refund'}
                 </span>
               </div>
             ))}

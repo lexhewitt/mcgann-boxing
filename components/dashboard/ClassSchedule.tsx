@@ -5,7 +5,7 @@ import Button from '../ui/Button';
 import { UserRole, Member, FamilyMember } from '../../types';
 import Modal from '../ui/Modal';
 import { calculateAge } from '../../utils/helpers';
-import { isCoachAvailable, getNextDateForDay } from '../../utils/time';
+import { isCoachAvailable, getNextDateForDay, getNextClassDateTime } from '../../utils/time';
 import { handleStripeCheckout } from '../../services/stripeService';
 
 
@@ -77,10 +77,12 @@ const ClassSchedule: React.FC = () => {
         // Store the booking details in localStorage before redirecting to Stripe.
         // This allows us to retrieve and finalize the booking upon successful return.
         const coach = coaches.find(c => c.id === classToBook.coachId);
+        const sessionDate = getNextClassDateTime(classToBook);
         const pendingBooking = {
             memberId: currentUser.id,
             participantId: selectedParticipant,
             classId: classToBook.id,
+            sessionStart: sessionDate.toISOString(),
             summary: {
               type: 'CLASS',
               title: classToBook.name,

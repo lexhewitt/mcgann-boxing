@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { GymClass, Booking, UserRole } from '../../types';
+import { GymClass, Booking, UserRole, GuestBooking } from '../../types';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
@@ -16,7 +16,7 @@ interface ClassDetailsModalProps {
 }
 
 const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose }) => {
-  const { members, familyMembers, bookings, coaches, deleteBooking, undoClassTransfer, toggleAttendance } = useData();
+  const { members, familyMembers, bookings, coaches, cancelBooking, cancelGuestBooking, undoClassTransfer, toggleAttendance, guestBookings } = useData();
   const { currentUser } = useAuth();
   const [bookingToTransfer, setBookingToTransfer] = useState<Booking | null>(null);
   const [isEditingClass, setIsEditingClass] = useState(false);
@@ -26,6 +26,10 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
   const coach = coaches.find(c => c.id === gymClass.coachId);
   const originalCoach = coaches.find(c => c.id === gymClass.originalCoachId);
   const classBookings = bookings.filter(b => b.classId === gymClass.id);
+  const confirmedGuestBookings = guestBookings.filter(
+    gb => gb.serviceType === 'CLASS' && gb.referenceId === gymClass.id && gb.status === 'CONFIRMED'
+  );
+  const totalConfirmedCount = classBookings.length + confirmedGuestBookings.length;
   
   const allParticipants = useMemo(() => [...members, ...familyMembers], [members, familyMembers]);
 
@@ -35,11 +39,12 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
   })).filter(item => !!item.participant);
 
   const isAuthorized = currentUser?.role === 'ADMIN' || currentUser?.id === gymClass.coachId;
-  const isClassFull = classBookings.length >= gymClass.capacity;
+  const isClassFull = totalConfirmedCount >= gymClass.capacity;
 
   const handleRemove = (bookingId: string) => {
-    if (currentUser && window.confirm('Are you sure you want to remove this member from the class? This action cannot be undone.')) {
-      deleteBooking(bookingId, currentUser);
+    if (currentUser && window.confirm('Cancel this booking? Refunds are only issued 24 hours before the class.')) {
+      const result = cancelBooking(bookingId, currentUser, { allowLate: true });
+      alert(result.message);
     }
   };
   
@@ -61,7 +66,7 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
             <p className="text-gray-400">{gymClass.day} at {gymClass.time}</p>
             <p className="text-gray-400">Coach: {coach?.name}</p>
             {originalCoach && <p className="text-sm text-yellow-400 italic">Covering for: {originalCoach.name}</p>}
-            <p className="text-gray-400">Bookings: {classBookings.length} / {gymClass.capacity}</p>
+            <p className="text-gray-400">Bookings: {totalConfirmedCount} / {gymClass.capacity}</p>
           </div>
 
           <div className="border-t border-gray-700 pt-4">
@@ -87,6 +92,11 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
                             Attended
                           </label>
                           <span className={`px-2 py-1 text-xs font-bold rounded ${booking.paid ? 'bg-green-600' : 'bg-yellow-500'}`}>{booking.paid ? 'Paid' : 'Unpaid'}</span>
+                          {booking.confirmationStatus === 'PENDING' && (
+                            <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-600 text-black">
+                              Awaiting confirmation
+                            </span>
+                          )}
                           <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => setBookingToTransfer(booking)}>Transfer</Button>
                           <Button variant="danger" className="text-xs py-1 px-2" onClick={() => handleRemove(booking.id)}>Remove</Button>
                         </div>
@@ -97,6 +107,27 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
                 <p className="text-gray-500">No members have booked this class yet.</p>
               )}
             </div>
+            {confirmedGuestBookings.length > 0 && (
+              <div className="mt-4 border-t border-gray-700 pt-3">
+                <h5 className="font-semibold text-white mb-2 text-sm uppercase tracking-wide">Confirmed Guest Bookings</h5>
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                  {confirmedGuestBookings.map((guest: GuestBooking) => (
+                    <div key={guest.id} className="bg-black/40 p-3 rounded-md text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-white">{guest.participantName}</p>
+                        <p className="text-xs text-gray-400">{guest.contactEmail} · {guest.contactPhone}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-1 text-xs font-bold rounded bg-green-600">Confirmed</span>
+                        <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleCancelGuest(guest.id)}>
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           
           <div className="flex justify-between items-center pt-4 border-t border-gray-700">
@@ -154,3 +185,9 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
 };
 
 export default ClassDetailsModal;
+  const handleCancelGuest = (guestId: string) => {
+    if (currentUser && window.confirm('Cancel this guest booking?')) {
+      const result = cancelGuestBooking(guestId, currentUser, { allowLate: true });
+      alert(result.message);
+    }
+  };

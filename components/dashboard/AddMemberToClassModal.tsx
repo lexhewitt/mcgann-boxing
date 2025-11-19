@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import { getNextClassDateTime } from '../../utils/time';
 
 interface AddMemberToClassModalProps {
   gymClass: GymClass;
@@ -31,7 +32,8 @@ const AddMemberToClassModal: React.FC<AddMemberToClassModalProps> = ({ gymClass,
         
         // When an admin/coach adds a member, default payment status to 'Unpaid'
         // FIX: Added missing 'participantId' to the addBooking call.
-        addBooking({ memberId: member.id, participantId: member.id, classId: gymClass.id, paid: false }, currentUser);
+        const nextSession = getNextClassDateTime(gymClass);
+        addBooking({ memberId: member.id, participantId: member.id, classId: gymClass.id, sessionStart: nextSession.toISOString(), paid: false }, currentUser);
         onClose();
     };
 

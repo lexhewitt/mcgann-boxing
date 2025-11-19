@@ -35,8 +35,7 @@ const HealthAndSafetyNotice: React.FC = () => (
 
 const MemberDashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
-    // FIX: Destructured 'members' from useData to make it available in the component scope.
-    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, transactions } = useData();
+    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, transactions, coachAppointments, coachSlots, cancelBooking, cancelCoachAppointment } = useData();
     const [isEditing, setIsEditing] = useState(false);
     const [isAddFamilyMemberOpen, setAddFamilyMemberOpen] = useState(false);
     
@@ -46,10 +45,18 @@ const MemberDashboard: React.FC = () => {
 
     const memberBookings = bookings.filter(b => b.memberId === currentUser.id);
     const paymentHistory = bookings.filter(b => b.memberId === currentUser.id && b.paid);
+    const upcomingPrivateSessions = useMemo(() => {
+        const now = new Date();
+        return coachAppointments
+            .map(appt => ({ appt, slot: coachSlots.find(slot => slot.id === appt.slotId) }))
+            .filter(item => item.slot && item.appt.memberId === currentUser.id && new Date(item.slot!.start) > now)
+            .sort((a, b) => new Date(a.slot!.start).getTime() - new Date(b.slot!.start).getTime());
+    }, [coachAppointments, coachSlots, currentUser.id]);
     const memberTransactions = useMemo(
         () => transactions.filter(tx => tx.memberId === currentUser.id),
         [transactions, currentUser.id],
     );
+    const cancellationWindowMs = 24 * 60 * 60 * 1000;
 
     const memberFamily = useMemo(() => 
         familyMembers.filter(fm => fm.parentId === currentUser.id), 
@@ -84,6 +91,21 @@ const MemberDashboard: React.FC = () => {
         return <p><strong>Membership:</strong> <span className="text-gray-400">None</span></p>;
     }
 
+    const canCancelBooking = (sessionStart?: string) => {
+        if (!sessionStart) return false;
+        return new Date(sessionStart).getTime() - Date.now() >= cancellationWindowMs;
+    };
+
+    const handleCancelClassBooking = (bookingId: string) => {
+        const result = cancelBooking(bookingId, currentUser);
+        alert(result.message);
+    };
+
+    const handleCancelSession = (appointmentId: string) => {
+        const result = cancelCoachAppointment(appointmentId, currentUser);
+        alert(result.message);
+    };
+
     return (
         <div className="space-y-8">
         <MemberFinancialSummary
@@ -108,24 +130,38 @@ const MemberDashboard: React.FC = () => {
                                     const cls = classes.find(c => c.id === booking.classId);
                                     const participant = allParticipants.find(p => p.id === booking.participantId);
                                     const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
-                                    const confirmationStatus = bookingTransaction?.confirmationStatus;
-                                    const statusLabel = booking.paid
-                                        ? (confirmationStatus === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed')
-                                        : 'Unpaid';
+                                    const confirmationStatus = bookingTransaction?.confirmationStatus ?? booking.confirmationStatus;
+                                    const statusLabel = !booking.paid
+                                        ? 'Unpaid'
+                                        : confirmationStatus === 'PENDING'
+                                            ? 'Awaiting confirmation'
+                                            : confirmationStatus === 'CANCELED'
+                                                ? 'Canceled'
+                                                : 'Confirmed';
                                     const statusClass = !booking.paid
                                         ? 'bg-yellow-500 text-black'
                                         : confirmationStatus === 'PENDING'
                                             ? 'bg-yellow-600 text-black'
-                                            : 'bg-green-600';
+                                            : confirmationStatus === 'CANCELED'
+                                                ? 'bg-gray-600'
+                                                : 'bg-green-600';
+                                    const showCancel = booking.paid && confirmationStatus !== 'CANCELED' && canCancelBooking(booking.sessionStart);
                                     return (
-                                        <li key={booking.id} className="flex justify-between items-center bg-brand-dark p-3 rounded">
+                                        <li key={booking.id} className="flex flex-col gap-2 bg-brand-dark p-3 rounded md:flex-row md:items-center md:justify-between">
                                             <div>
                                                 <p className="font-bold">{cls?.name}</p>
                                                 <p className="text-sm text-gray-400">
                                                     {cls?.day} at {cls?.time} {booking.participantId !== currentUser.id && `(for ${participant?.name})`}
                                                 </p>
                                             </div>
-                                            <span className={`px-2 py-1 text-xs font-bold rounded ${statusClass}`}>{statusLabel}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`px-2 py-1 text-xs font-bold rounded ${statusClass}`}>{statusLabel}</span>
+                                                {showCancel && (
+                                                    <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleCancelClassBooking(booking.id)}>
+                                                        Cancel
+                                                    </Button>
+                                                )}
+                                            </div>
                                         </li>
                                     );
                                 })}
@@ -135,7 +171,7 @@ const MemberDashboard: React.FC = () => {
                         )}
                     </div>
                 </div>
-                 <div>
+                <div>
                     <h2 className="text-2xl font-semibold text-white mb-4">Booking History</h2>
                     <div className="bg-brand-gray p-4 rounded-lg">
                         {paymentHistory.length > 0 ? (
@@ -165,6 +201,40 @@ const MemberDashboard: React.FC = () => {
                         )}
                     </div>
                 </div>
+                {upcomingPrivateSessions.length > 0 && (
+                    <div>
+                        <h2 className="text-2xl font-semibold text-white mb-4">My Private Sessions</h2>
+                        <div className="bg-brand-gray p-4 rounded-lg">
+                            <ul className="space-y-2">
+                                {upcomingPrivateSessions.map(({ appt, slot }) => {
+                                    if (!slot) return null;
+                                    const coach = coaches.find(c => c.id === slot.coachId);
+                                    const canCancel = new Date(slot.start).getTime() - Date.now() >= cancellationWindowMs;
+                                    return (
+                                        <li key={appt.id} className="flex flex-col gap-2 bg-brand-dark p-3 rounded md:flex-row md:items-center md:justify-between">
+                                            <div>
+                                                <p className="font-bold">{slot.title}</p>
+                                                <p className="text-sm text-gray-400">
+                                                    {new Date(slot.start).toLocaleString()} with {coach?.name ?? 'Coach'}
+                                                </p>
+                                            </div>
+                        <div className="flex items-center gap-2">
+                                                <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-600 text-black">
+                                                    Awaiting confirmation
+                                                </span>
+                                                {canCancel && (
+                                                    <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleCancelSession(appt.id)}>
+                                                        Cancel
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="space-y-6">

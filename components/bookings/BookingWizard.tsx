@@ -146,7 +146,7 @@ const BookingWizard: React.FC = () => {
       if (pending) {
         try {
           const payload = JSON.parse(pending);
-          const entry: Omit<GuestBooking, 'id'> = {
+          const entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'> = {
             serviceType: payload.type === 'CLASS' ? 'CLASS' : 'PRIVATE',
             referenceId: payload.referenceId,
             title: payload.title,
@@ -425,8 +425,13 @@ const BookingWizard: React.FC = () => {
           <h3 className="text-white font-semibold mb-2">Recent Guest Bookings (demo)</h3>
           <ul className="text-sm text-gray-300 space-y-1 max-h-40 overflow-y-auto">
             {guestBookings.map(entry => (
-              <li key={entry.id}>
-                {entry.participantName} booked {entry.title} ({entry.serviceType}) for {formatDate(new Date(entry.date))}
+              <li key={entry.id} className="flex items-center justify-between">
+                <span>
+                  {entry.participantName} booked {entry.title} ({entry.serviceType}) for {formatDate(new Date(entry.date))}
+                </span>
+                <span className={`text-xs font-bold px-2 py-0.5 rounded ${entry.status === 'CONFIRMED' ? 'bg-green-600' : entry.status === 'CANCELED' ? 'bg-gray-500' : 'bg-yellow-600 text-black'}`}>
+                  {entry.status === 'PENDING' ? 'Pending' : entry.status === 'CONFIRMED' ? 'Confirmed' : 'Canceled'}
+                </span>
               </li>
             ))}
           </ul>

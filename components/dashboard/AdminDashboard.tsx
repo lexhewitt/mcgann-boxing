@@ -24,7 +24,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const { currentUser } = useAuth();
   const { bookings, classes, members, notifications, bookingAlerts } = useData();
   const pendingClassTransfers = notifications.filter(n => n.status === NotificationStatus.PENDING).length;
-  const pendingBookingAlerts = bookingAlerts.filter(alert => alert.status === 'PENDING').length;
+  const pendingBookingAlerts = (() => {
+    const raw = bookingAlerts.filter(alert => alert.status === 'PENDING');
+    const seen = new Set<string>();
+    let count = 0;
+    raw.forEach(alert => {
+      const key = `${alert.transactionId ?? ''}|${alert.guestBookingId ?? ''}|${alert.referenceId ?? ''}|${alert.participantName ?? ''}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        count += 1;
+      }
+    });
+    return count;
+  })();
   const totalPendingNotifications = pendingClassTransfers + pendingBookingAlerts;
 
   const renderContent = () => {

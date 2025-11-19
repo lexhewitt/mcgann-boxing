@@ -44,6 +44,26 @@ export const getNextDateForDay = (day: GymClass['day']): Date => {
     return nextDate;
 };
 
+/**
+ * Returns the next actual Date instance when a given class will start.
+ * Uses the class's day + start time and rolls forward a week if the time has already passed today.
+ */
+export const getNextClassDateTime = (gymClass: GymClass): Date => {
+    const nextDate = getNextDateForDay(gymClass.day);
+    const startSegment = gymClass.time.split('–')[0]?.trim();
+    if (startSegment) {
+        const [hours, minutes] = startSegment.split(':').map(Number);
+        nextDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+    } else {
+        nextDate.setHours(0, 0, 0, 0);
+    }
+    const now = new Date();
+    if (nextDate <= now) {
+        nextDate.setDate(nextDate.getDate() + 7);
+    }
+    return nextDate;
+};
+
 interface AvailabilityCheckParams {
     coachId: string;
     day: GymClass['day'];

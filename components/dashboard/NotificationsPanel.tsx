@@ -112,7 +112,18 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
     );
 
     const bookingSection = () => {
-        const relevant = user.role === UserRole.ADMIN ? bookingAlerts : bookingAlerts.filter(alert => alert.coachId === user.id);
+        const rawRelevant = user.role === UserRole.ADMIN ? bookingAlerts : bookingAlerts.filter(alert => alert.coachId === user.id);
+        const relevant: typeof rawRelevant = [];
+        const seen = new Set<string>();
+        rawRelevant.forEach(alert => {
+            const key = user.role === UserRole.ADMIN
+                ? `${alert.transactionId ?? ''}|${alert.guestBookingId ?? ''}|${alert.referenceId ?? ''}|${alert.participantName ?? ''}|${alert.timestamp}`
+                : alert.id;
+            if (!seen.has(key)) {
+                seen.add(key);
+                relevant.push(alert);
+            }
+        });
         if (relevant.length === 0) return null;
         return (
             <div className="mb-8">

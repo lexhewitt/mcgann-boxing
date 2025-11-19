@@ -46,7 +46,10 @@ interface DataContextType {
   addTransaction: (transaction: Omit<Transaction, 'id' | 'currency' | 'createdAt'> & { currency?: Transaction['currency'] }) => Transaction;
   updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
   bookCoachSlot: (slotId: string, member: Member, participantName: string) => void;
-  addGuestBooking: (entry: Omit<GuestBooking, 'id'>) => void;
+  addGuestBooking: (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => void;
+  cancelBooking: (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => { success: boolean; message: string };
+  cancelCoachAppointment: (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => { success: boolean; message: string };
+  cancelGuestBooking: (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => { success: boolean; message: string };
   acknowledgeBookingAlert: (alertId: string, actor?: AppUser) => void;
 }
 
@@ -68,6 +71,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [coachAppointments, setCoachAppointments] = useState<CoachAppointment[]>(INITIAL_COACH_APPOINTMENTS);
   const [guestBookings, setGuestBookings] = useState<GuestBooking[]>([]);
   const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([]);
+  const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
   const addAuditLog = (log: Omit<AuditLog, 'id'>) => {
     const newLog: AuditLog = { ...log, id: `log-${Date.now()}` };
@@ -111,14 +115,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }, ...prev]);
   };
 
+  const markBookingConfirmed = (bookingId?: string) => {
+    if (!bookingId) return;
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, confirmationStatus: 'CONFIRMED' } : b));
+  };
+
+  const markGuestBookingConfirmed = (guestBookingId?: string) => {
+    if (!guestBookingId) return;
+    setGuestBookings(prev => prev.map(g => g.id === guestBookingId ? { ...g, status: 'CONFIRMED' } : g));
+  };
+
   const acknowledgeBookingAlert = (alertId: string, actor?: AppUser) => {
     setBookingAlerts(prev => prev.map(alert => {
       if (alert.id !== alertId) return alert;
       if (alert.transactionId) {
-        updateTransaction(alert.transactionId, {
-          confirmationStatus: 'CONFIRMED',
-          status: TransactionStatus.PAID,
-        });
+        const linkedTx = transactions.find(tx => tx.id === alert.transactionId);
+        if (linkedTx) {
+          updateTransaction(alert.transactionId, {
+            confirmationStatus: 'CONFIRMED',
+            status: TransactionStatus.PAID,
+          });
+          if (linkedTx.bookingId) {
+            markBookingConfirmed(linkedTx.bookingId);
+          }
+        }
+      }
+      if (alert.guestBookingId) {
+        markGuestBookingConfirmed(alert.guestBookingId);
       }
       return {
         ...alert,
@@ -145,6 +168,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (owner?.mobileNumber && owner.id !== coachId) {
       sendWhatsAppNotification(owner.mobileNumber, message);
     }
+  };
+
+  const isRefundEligible = (sessionStart?: string | Date | null) => {
+    if (!sessionStart) return false;
+    const date = sessionStart instanceof Date ? sessionStart : new Date(sessionStart);
+    return date.getTime() - Date.now() >= CANCELLATION_WINDOW_MS;
+  };
+
+  const closeAlerts = (predicate: (alert: BookingAlert) => boolean, actor?: AppUser) => {
+    setBookingAlerts(prev => prev.map(alert => predicate(alert) ? {
+      ...alert,
+      status: 'ACKNOWLEDGED',
+      confirmedBy: actor?.name ?? alert.confirmedBy,
+      confirmedAt: new Date().toISOString(),
+    } : alert));
   };
 
   const bookCoachSlot = (slotId: string, member: Member, participantName: string) => {
@@ -191,9 +229,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addGuestBooking = (entry: Omit<GuestBooking, 'id'>) => {
+  const addGuestBooking = (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => {
     const booking: GuestBooking = {
       id: `guest-${Date.now()}`,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
       ...entry,
     };
     setGuestBookings(prev => [booking, ...prev]);
@@ -207,6 +247,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             referenceId: gymClass.id,
             participantName: entry.participantName,
             amount: gymClass.price,
+            guestBookingId: booking.id,
           });
         }
       } else {
@@ -218,10 +259,126 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             referenceId: slot.id,
             participantName: entry.participantName,
             amount: slot.price,
+            guestBookingId: booking.id,
           });
         }
       }
     }
+  };
+
+  const cancelBooking = (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
+    const bookingToCancel = bookings.find(b => b.id === bookingId);
+    if (!bookingToCancel) {
+      return { success: false, message: 'Booking not found.' };
+    }
+    const gymClass = classes.find(c => c.id === bookingToCancel.classId);
+    const participant = [...members, ...familyMembers].find(p => p.id === bookingToCancel.participantId);
+    const sessionDate = bookingToCancel.sessionStart ? new Date(bookingToCancel.sessionStart) : null;
+    const refundEligible = isRefundEligible(sessionDate);
+    if (!refundEligible && !options?.allowLate) {
+      return { success: false, message: 'This class starts within 24 hours. Please contact the gym to cancel.' };
+    }
+    const shouldRefund = options?.issueRefund ?? refundEligible;
+
+    setBookings(prev => prev.filter(b => b.id !== bookingId));
+
+    const tx = transactions.find(tx => tx.bookingId === bookingId);
+    if (tx) {
+      setTransactions(prev => prev.map(t => t.id === tx.id ? {
+        ...t,
+        status: shouldRefund ? TransactionStatus.REFUNDED : t.status,
+        confirmationStatus: shouldRefund ? 'CONFIRMED' : 'CANCELED',
+        settledAt: shouldRefund ? new Date().toISOString() : t.settledAt,
+      } : t));
+      closeAlerts(alert => alert.transactionId === tx.id, actor);
+    }
+
+    addAuditLog({
+      timestamp: new Date().toISOString(),
+      actorId: actor.id,
+      action: 'MEMBER_REMOVED_FROM_CLASS',
+      details: `${actor.name} canceled ${participant?.name ?? 'a participant'} from ${gymClass?.name ?? 'a class'}. ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`,
+    });
+
+    if (gymClass) {
+      const notifyMessage = `Cancellation: ${participant?.name ?? 'Participant'} withdrew from ${gymClass.name} (${gymClass.day} ${gymClass.time}). ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`;
+      notifyCoachAndOwner(gymClass.coachId, notifyMessage);
+    }
+
+    return {
+      success: true,
+      message: shouldRefund ? 'Booking canceled and refunded.' : 'Booking canceled. No refund issued (inside 24 hours).',
+    };
+  };
+
+  const cancelCoachAppointment = (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => {
+    const appointment = coachAppointments.find(appt => appt.id === appointmentId);
+    if (!appointment) {
+      return { success: false, message: 'Session not found.' };
+    }
+    const slot = coachSlots.find(s => s.id === appointment.slotId);
+    if (!slot) {
+      return { success: false, message: 'Session slot not found.' };
+    }
+    const refundEligible = isRefundEligible(slot.start);
+    if (!refundEligible && !options?.allowLate) {
+      return { success: false, message: 'This session starts within 24 hours. Please contact the gym to cancel.' };
+    }
+    const shouldRefund = options?.issueRefund ?? refundEligible;
+
+    setCoachAppointments(prev => prev.filter(appt => appt.id !== appointmentId));
+
+    const tx = transactions.find(tx => tx.slotId === slot.id && tx.memberId === appointment.memberId);
+    if (tx) {
+      setTransactions(prev => prev.map(t => t.id === tx.id ? {
+        ...t,
+        status: shouldRefund ? TransactionStatus.REFUNDED : t.status,
+        confirmationStatus: shouldRefund ? 'CONFIRMED' : 'CANCELED',
+        settledAt: shouldRefund ? new Date().toISOString() : t.settledAt,
+      } : t));
+      closeAlerts(alert => alert.transactionId === tx.id, actor);
+    }
+
+    addAuditLog({
+      timestamp: new Date().toISOString(),
+      actorId: actor.id,
+      action: 'MEMBER_REMOVED_FROM_CLASS',
+      details: `${actor.name} canceled ${appointment.participantName}'s session (${slot.title}). ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`,
+    });
+
+    const notifyMessage = `Cancellation: ${appointment.participantName} withdrew from ${slot.title} on ${new Date(slot.start).toLocaleString()}. ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`;
+    notifyCoachAndOwner(slot.coachId, notifyMessage);
+
+    return {
+      success: true,
+      message: shouldRefund ? 'Session canceled and refunded.' : 'Session canceled. No refund issued (inside 24 hours).',
+    };
+  };
+
+  const cancelGuestBooking = (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => {
+    const guestBooking = guestBookings.find(g => g.id === guestBookingId);
+    if (!guestBooking) {
+      return { success: false, message: 'Guest booking not found.' };
+    }
+    const refundEligible = isRefundEligible(guestBooking.date);
+    if (!refundEligible && !options?.allowLate) {
+      return { success: false, message: 'This booking starts within 24 hours. Please contact the gym.' };
+    }
+
+    setGuestBookings(prev => prev.map(g => g.id === guestBookingId ? { ...g, status: 'CANCELED' } : g));
+    closeAlerts(alert => alert.guestBookingId === guestBookingId, actor);
+
+    addAuditLog({
+      timestamp: new Date().toISOString(),
+      actorId: actor.id,
+      action: 'MEMBER_REMOVED_FROM_CLASS',
+      details: `${actor.name} canceled guest booking for ${guestBooking.participantName} (${guestBooking.title}).`,
+    });
+
+    return {
+      success: true,
+      message: refundEligible ? 'Guest booking canceled.' : 'Guest booking canceled (late cancellation - manual refund may be required).',
+    };
   };
   // --- Notification and Class Transfer Logic ---
   
@@ -332,6 +489,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       id: `b${Date.now()}`,
       bookingDate: new Date().toISOString(),
       attended: false,
+      confirmationStatus: booking.paid ? 'PENDING' : 'CONFIRMED',
     };
 
     const allParticipants = [...members, ...familyMembers];
@@ -382,28 +540,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
   
   const deleteBooking = (bookingId: string, actor: AppUser) => {
-    const bookingToDelete = bookings.find(b => b.id === bookingId);
-    if (bookingToDelete) {
-        const allParticipants = [...members, ...familyMembers];
-        const participant = allParticipants.find(p => p.id === bookingToDelete.participantId);
-        const gymClass = classes.find(c => c.id === bookingToDelete.classId);
-        if (participant && gymClass) {
-            addAuditLog({
-                timestamp: new Date().toISOString(),
-                actorId: actor.id,
-                action: 'MEMBER_REMOVED_FROM_CLASS',
-                details: `${actor.name} removed ${participant.name} from ${gymClass.name}.`,
-            });
-        }
-
-        setTransactions(prev => prev.map(tx => 
-            tx.bookingId === bookingId 
-                ? { ...tx, status: TransactionStatus.REFUNDED, settledAt: new Date().toISOString() }
-                : tx
-        ));
-    }
-
-    setBookings(prev => prev.filter(b => b.id !== bookingId));
+    cancelBooking(bookingId, actor, { allowLate: true, issueRefund: false });
   };
 
   const updateBooking = (bookingId: string, newClassId: string, actor: AppUser) => {
@@ -546,7 +683,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, acknowledgeBookingAlert }}>
+    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, cancelBooking, cancelCoachAppointment, cancelGuestBooking, acknowledgeBookingAlert }}>
       {children}
     </DataContext.Provider>
   );

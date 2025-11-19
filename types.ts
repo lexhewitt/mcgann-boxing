@@ -59,7 +59,7 @@ export interface GymClass {
   originalCoachId?: string; // ID of the coach who this class was temporarily transferred from
 }
 
-export type ConfirmationStatus = 'PENDING' | 'CONFIRMED';
+export type ConfirmationStatus = 'PENDING' | 'CONFIRMED' | 'CANCELED';
 
 export interface Booking {
   id:string;
@@ -69,6 +69,7 @@ export interface Booking {
   bookingDate: string;   // ISO string
   paid: boolean;
   attended?: boolean;
+  confirmationStatus?: ConfirmationStatus;
 }
 
 export enum NotificationStatus {
@@ -173,6 +174,8 @@ export interface GuestBooking {
   contactName: string;
   contactEmail: string;
   contactPhone: string;
+  status: ConfirmationStatus;
+  createdAt: string;
 }
 
 export enum TransactionStatus {
@@ -218,6 +221,7 @@ export interface BookingAlert {
   participantName?: string;
   amount?: number;
   transactionId?: string;
+  guestBookingId?: string;
   status: BookingAlertStatus;
   confirmedBy?: string;
   confirmedAt?: string;
