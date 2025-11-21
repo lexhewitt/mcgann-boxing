@@ -3,13 +3,12 @@ import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Coach, Member, UserRole, FamilyMember } from '../../types';
-import ClassSchedule from './ClassSchedule';
+import MemberBookingHub from './MemberBookingHub';
 import Button from '../ui/Button';
 import AddFamilyMemberModal from './AddFamilyMemberModal';
 import { calculateAge } from '../../utils/helpers';
 import GymAccess from './GymAccess';
 import MemberFinancialSummary from './MemberFinancialSummary';
-import CoachScheduler from '../scheduling/CoachScheduler';
 
 const HealthAndSafetyNotice: React.FC = () => (
     <div className="bg-yellow-900/20 border-l-4 border-yellow-500 text-yellow-300 p-4 rounded-lg my-8 lg:col-span-3">
@@ -116,12 +115,8 @@ const MemberDashboard: React.FC = () => {
         <HealthAndSafetyNotice />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-2 space-y-8">
-                <CoachScheduler />
+                <MemberBookingHub />
                 <div>
-                    <h2 className="text-2xl font-semibold text-white mb-4">Book a Class</h2>
-                    <ClassSchedule />
-                </div>
-                 <div>
                     <h2 className="text-2xl font-semibold text-white mb-4">My Upcoming Bookings</h2>
                     <div className="bg-brand-gray p-4 rounded-lg">
                         {memberBookings.length > 0 ? (
@@ -157,8 +152,8 @@ const MemberDashboard: React.FC = () => {
                                             <div className="flex items-center gap-2">
                                                 <span className={`px-2 py-1 text-xs font-bold rounded ${statusClass}`}>{statusLabel}</span>
                                                 {showCancel && (
-                                                    <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleCancelClassBooking(booking.id)}>
-                                                        Cancel
+                                                    <Button variant="secondary" className="text-xs py-1 px-3" onClick={() => handleCancelClassBooking(booking.id)}>
+                                                        Cancel Booking
                                                     </Button>
                                                 )}
                                             </div>
@@ -223,8 +218,8 @@ const MemberDashboard: React.FC = () => {
                                                     Awaiting confirmation
                                                 </span>
                                                 {canCancel && (
-                                                    <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleCancelSession(appt.id)}>
-                                                        Cancel
+                                                    <Button variant="secondary" className="text-xs py-1 px-3" onClick={() => handleCancelSession(appt.id)}>
+                                                        Cancel Booking
                                                     </Button>
                                                 )}
                                             </div>
