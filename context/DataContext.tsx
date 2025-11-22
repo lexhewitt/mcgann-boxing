@@ -1,6 +1,7 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole, ConfirmationStatus } from '../types';
 import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS, INITIAL_TRANSACTIONS, COACH_SLOTS, INITIAL_COACH_APPOINTMENTS } from '../constants';
+import { supabase } from '../services/supabaseClient';
 import { sendWhatsAppNotification } from '../services/notificationService';
 
 interface DataContextType {
@@ -71,6 +72,109 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [coachAppointments, setCoachAppointments] = useState<CoachAppointment[]>(INITIAL_COACH_APPOINTMENTS);
   const [guestBookings, setGuestBookings] = useState<GuestBooking[]>([]);
   const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([]);
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      if (!supabase) return;
+      try {
+        const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes] =
+          await Promise.all([
+            supabase.from('coaches').select('*'),
+            supabase.from('members').select('*'),
+            supabase.from('family_members').select('*'),
+            supabase.from('classes').select('*'),
+            supabase.from('bookings').select('*'),
+            supabase.from('coach_slots').select('*'),
+            supabase.from('coach_appointments').select('*'),
+            supabase.from('transactions').select('*'),
+            supabase.from('guest_bookings').select('*'),
+          ]);
+
+        if (!coachesRes.error && coachesRes.data) setCoaches(coachesRes.data as Coach[]);
+        if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
+        if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
+        if (!classesRes.error && classesRes.data) setClasses(classesRes.data as GymClass[]);
+        if (!bookingsRes.error && bookingsRes.data) {
+          const mapped = bookingsRes.data.map((b: any) => ({
+            id: b.id,
+            memberId: b.member_id,
+            participantId: b.participant_id || b.participant_family_id || b.member_id,
+            classId: b.class_id,
+            bookingDate: b.booking_date,
+            paid: b.paid,
+            attended: b.attended,
+            confirmationStatus: b.confirmation_status,
+            sessionStart: b.session_start,
+          })) as Booking[];
+          setBookings(mapped);
+        }
+        if (!slotsRes.error && slotsRes.data) {
+          const mapped = (slotsRes.data as any[]).map(row => ({
+            id: row.id,
+            coachId: row.coach_id,
+            type: row.type,
+            title: row.title,
+            description: row.description,
+            start: row.start,
+            end: row.end,
+            capacity: row.capacity,
+            price: Number(row.price),
+            location: row.location,
+          })) as CoachSlot[];
+          setCoachSlots(mapped);
+        }
+        if (!apptsRes.error && apptsRes.data) {
+          const mapped = (apptsRes.data as any[]).map(row => ({
+            id: row.id,
+            slotId: row.slot_id,
+            memberId: row.member_id,
+            participantName: row.participant_name,
+            status: row.status,
+            createdAt: row.created_at,
+          })) as CoachAppointment[];
+          setCoachAppointments(mapped);
+        }
+        if (!txRes.error && txRes.data) {
+          const mapped = (txRes.data as any[]).map(row => ({
+            id: row.id,
+            memberId: row.member_id,
+            coachId: row.coach_id,
+            bookingId: row.booking_id,
+            slotId: row.slot_id,
+            amount: Number(row.amount),
+            currency: row.currency,
+            source: row.source,
+            status: row.status,
+            description: row.description,
+            stripeSessionId: row.stripe_session_id,
+            createdAt: row.created_at,
+            settledAt: row.settled_at,
+            confirmationStatus: row.confirmation_status,
+          })) as Transaction[];
+          setTransactions(mapped);
+        }
+        if (!guestRes.error && guestRes.data) {
+          const mapped = (guestRes.data as any[]).map(row => ({
+            id: row.id,
+            serviceType: row.service_type,
+            referenceId: row.reference_id,
+            title: row.title,
+            date: row.date,
+            participantName: row.participant_name,
+            contactName: row.contact_name,
+            contactEmail: row.contact_email,
+            contactPhone: row.contact_phone,
+            status: row.status,
+            createdAt: row.created_at,
+          })) as GuestBooking[];
+          setGuestBookings(mapped);
+        }
+      } catch (error) {
+        console.error('Failed to load data from Supabase', error);
+      }
+    };
+
+    loadFromSupabase();
+  }, []);
   const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
   const addAuditLog = (log: Omit<AuditLog, 'id'>) => {
@@ -87,11 +191,41 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...transaction,
     };
     setTransactions(prev => [newTransaction, ...prev]);
+    if (supabase) {
+      supabase.from('transactions').insert({
+        id: newTransaction.id,
+        member_id: newTransaction.memberId,
+        coach_id: newTransaction.coachId,
+        booking_id: newTransaction.bookingId,
+        slot_id: newTransaction.slotId,
+        amount: newTransaction.amount,
+        currency: newTransaction.currency,
+        source: newTransaction.source,
+        status: newTransaction.status,
+        description: newTransaction.description,
+        stripe_session_id: newTransaction.stripeSessionId,
+        confirmation_status: newTransaction.confirmationStatus,
+        created_at: newTransaction.createdAt,
+        settled_at: newTransaction.settledAt,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert transaction failed', error.message);
+      });
+    }
     return newTransaction;
   };
 
   const updateTransaction = (transactionId: string, updates: Partial<Transaction>) => {
     setTransactions(prev => prev.map(tx => tx.id === transactionId ? { ...tx, ...updates } : tx));
+    if (supabase) {
+      const payload: any = {};
+      if (updates.status) payload.status = updates.status;
+      if (updates.confirmationStatus) payload.confirmation_status = updates.confirmationStatus;
+      if (updates.settledAt) payload.settled_at = updates.settledAt;
+      if (updates.description) payload.description = updates.description;
+      supabase.from('transactions').update(payload).eq('id', transactionId).then(({ error }) => {
+        if (error) console.error('Supabase: update transaction failed', error.message);
+      });
+    }
   };
 
   const getOwnerId = (): string => {
@@ -219,6 +353,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     setCoachAppointments(prev => [appointment, ...prev]);
+    if (supabase) {
+      supabase.from('coach_appointments').insert({
+        id: appointment.id,
+        slot_id: slotId,
+        member_id: member.id,
+        participant_name: participantName,
+        status: appointment.status,
+        created_at: appointment.createdAt,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert coach appointment failed', error.message);
+      });
+    }
 
     const transaction = addTransaction({
       memberId: member.id,
@@ -258,6 +404,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ...entry,
     };
     setGuestBookings(prev => [booking, ...prev]);
+    if (supabase) {
+      supabase.from('guest_bookings').insert({
+        id: booking.id,
+        service_type: booking.serviceType,
+        reference_id: booking.referenceId,
+        title: booking.title,
+        date: booking.date,
+        participant_name: booking.participantName,
+        contact_name: booking.contactName,
+        contact_email: booking.contactEmail,
+        contact_phone: booking.contactPhone,
+        status: booking.status,
+        created_at: booking.createdAt,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert guest booking failed', error.message);
+      });
+    }
     if (entry.referenceId) {
       if (entry.serviceType === 'CLASS') {
         const gymClass = classes.find(cls => cls.id === entry.referenceId);
@@ -314,6 +477,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setBookings(prev => prev.filter(b => b.id !== bookingId));
+    if (supabase) {
+      supabase.from('bookings').delete().eq('id', bookingId).then(({ error }) => {
+        if (error) console.error('Supabase: delete booking failed', error.message);
+      });
+    }
 
     if (tx) {
       setTransactions(prev => prev.map(t => t.id === tx.id ? {
@@ -371,6 +539,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setCoachAppointments(prev => prev.filter(appt => appt.id !== appointmentId));
+    if (supabase) {
+      supabase.from('coach_appointments').delete().eq('id', appointmentId).then(({ error }) => {
+        if (error) console.error('Supabase: delete coach appointment failed', error.message);
+      });
+    }
 
     if (tx) {
       setTransactions(prev => prev.map(t => t.id === tx.id ? {
@@ -409,6 +582,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setGuestBookings(prev => prev.map(g => g.id === guestBookingId ? { ...g, status: 'CANCELED' } : g));
+    if (supabase) {
+      supabase.from('guest_bookings').update({ status: 'CANCELED' }).eq('id', guestBookingId).then(({ error }) => {
+        if (error) console.error('Supabase: update guest booking failed', error.message);
+      });
+    }
     closeAlerts(alert => alert.guestBookingId === guestBookingId, actor);
 
     addAuditLog({
@@ -582,6 +760,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     setBookings(prev => [...prev, newBooking]);
+    if (supabase) {
+      supabase.from('bookings').insert({
+        id: newBooking.id,
+        member_id: newBooking.memberId,
+        participant_id: newBooking.participantId,
+        class_id: newBooking.classId,
+        booking_date: newBooking.bookingDate,
+        session_start: newBooking.sessionStart,
+        paid: newBooking.paid,
+        attended: newBooking.attended,
+        confirmation_status: newBooking.confirmationStatus,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert booking failed', error.message);
+      });
+    }
   };
   
   const deleteBooking = async (bookingId: string, actor: AppUser) => {
@@ -618,6 +811,25 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addMember = (newMemberData: Omit<Member, 'id'>) => {
     const newMember: Member = { ...newMemberData, id: `m${Date.now()}` };
     setMembers(prev => [...prev, newMember]);
+    if (supabase) {
+      supabase.from('members').insert({
+        id: newMember.id,
+        name: newMember.name,
+        email: newMember.email,
+        dob: newMember.dob,
+        sex: newMember.sex,
+        ability: newMember.ability,
+        bio: newMember.bio,
+        coach_id: newMember.coachId,
+        is_carded: newMember.isCarded,
+        membership_status: newMember.membershipStatus,
+        membership_start_date: newMember.membershipStartDate,
+        membership_expiry: newMember.membershipExpiry,
+        is_rolling_monthly: newMember.isRollingMonthly,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert member failed', error.message);
+      });
+    }
     return newMember;
   };
   
@@ -647,6 +859,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addCoach = (newCoachData: Omit<Coach, 'id'>): Coach => {
      const newCoach: Coach = { ...newCoachData, id: `c${Date.now()}` };
      setCoaches(prev => [...prev, newCoach]);
+     if (supabase) {
+       supabase.from('coaches').insert({
+         id: newCoach.id,
+         name: newCoach.name,
+         email: newCoach.email,
+         level: newCoach.level,
+         bio: newCoach.bio,
+         image_url: newCoach.imageUrl,
+         mobile_number: newCoach.mobileNumber,
+         bank_details: newCoach.bankDetails,
+         role: newCoach.role,
+       }).then(({ error }) => {
+         if (error) console.error('Supabase: insert coach failed', error.message);
+       });
+     }
      return newCoach;
   };
 
@@ -674,6 +901,23 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const addClass = (newClassData: Omit<GymClass, 'id'>) => {
     const newClass: GymClass = { ...newClassData, id: `cl${Date.now()}` };
     setClasses(prev => [...prev, newClass]);
+    if (supabase) {
+      supabase.from('classes').insert({
+        id: newClass.id,
+        name: newClass.name,
+        description: newClass.description,
+        day: newClass.day,
+        time: newClass.time,
+        coach_id: newClass.coachId,
+        capacity: newClass.capacity,
+        price: newClass.price,
+        min_age: newClass.minAge,
+        max_age: newClass.maxAge,
+        original_coach_id: newClass.originalCoachId,
+      }).then(({ error }) => {
+        if (error) console.error('Supabase: insert class failed', error.message);
+      });
+    }
   };
 
   const deleteClass = (classId: string) => {

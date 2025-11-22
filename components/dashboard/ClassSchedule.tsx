@@ -9,7 +9,11 @@ import { isCoachAvailable, getNextDateForDay, getNextClassDateTime } from '../..
 import { handleStripeCheckout } from '../../services/stripeService';
 
 
-const ClassSchedule: React.FC = () => {
+interface ClassScheduleProps {
+  viewMode?: 'daily' | 'weekly' | 'monthly';
+}
+
+const ClassSchedule: React.FC<ClassScheduleProps> = ({ viewMode = 'weekly' }) => {
   const { classes, coaches, bookings, addBooking, familyMembers, coachAvailability, unavailableSlots } = useData();
   const { currentUser } = useAuth();
   const [showBookingModal, setShowBookingModal] = useState<string | null>(null);
@@ -47,7 +51,10 @@ const ClassSchedule: React.FC = () => {
   }, [showBookingModal, eligibleParticipants, currentUser]);
 
   
-  const daysOfWeek: ('Monday'|'Tuesday'|'Wednesday'|'Thursday'|'Friday')[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+  const daysOfWeek: ('Monday'|'Tuesday'|'Wednesday'|'Thursday'|'Friday'|'Saturday'|'Sunday')[] =
+    viewMode === 'daily'
+      ? [new Date().toLocaleDateString(undefined, { weekday: 'long' }) as any]
+      : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const handleBookClick = (classId: string) => {
       if (!currentUser || currentUser.role !== UserRole.MEMBER) {
@@ -160,6 +167,18 @@ const ClassSchedule: React.FC = () => {
     )
   }
 
+  const filteredClasses = useMemo(() => {
+    if (viewMode === 'daily') {
+      const today = new Date();
+      const dayName = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][today.getDay()];
+      return classes.filter(c => c.day === dayName);
+    }
+    if (viewMode === 'monthly') {
+      return classes;
+    }
+    return classes.filter(c => daysOfWeek.slice(0, 5).includes(c.day));
+  }, [classes, viewMode]);
+
   return (
     <>
     <div className="bg-brand-gray p-6 rounded-lg space-y-4">
@@ -176,7 +195,7 @@ const ClassSchedule: React.FC = () => {
             <div key={day} className="bg-black/30 rounded-2xl p-3 border border-gray-700 shadow-lg">
               <h3 className="font-semibold text-center text-white mb-3 uppercase tracking-wide">{day}</h3>
               <div className="space-y-3">
-                {classes
+                {filteredClasses
                   .filter(c => c.day === day)
                 .sort((a,b) => a.time.localeCompare(b.time))
                 .map(cls => {
