@@ -1,0 +1,13 @@
+steps:
+- name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -t
+    - gcr.io/gen-lang-client-0158369562/mcgann-boxing:${_TAG}
+    - --build-arg
+    - VITE_SUPABASE_URL=${_VITE_SUPABASE_URL}
+    - --build-arg
+    - VITE_SUPABASE_ANON_KEY=${_VITE_SUPABASE_ANON_KEY}
+    - .
+images:
+- gcr.io/gen-lang-client-0158369562/mcgann-boxing:${_TAG}
