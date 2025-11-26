@@ -61,7 +61,7 @@ export const handleStripeCheckout = async (
   gymClass: GymClass, 
   participant: {id: string, name: string}, 
   memberId: string,
-  options?: { onSessionCreated?: (sessionId: string) => void }
+  options?: { onSessionCreated?: (sessionId: string) => void; sessionStart?: string }
 ): Promise<{ success: boolean; error?: string }> => {
   const stripe = await getStripe();
 
@@ -82,6 +82,8 @@ export const handleStripeCheckout = async (
         price: gymClass.price,
         participantId: participant.id,
         memberId: memberId,
+        coachId: gymClass.coachId,
+        sessionStart: options?.sessionStart,
       }),
     });
 
@@ -119,6 +121,8 @@ interface GuestCheckoutPayload {
   classId?: string;
   slotTitle?: string;
   slotId?: string;
+  coachId?: string;
+  sessionStart?: string;
   guestBooking: {
     participantName: string;
     participantDob?: string;
@@ -145,6 +149,8 @@ export const handleGuestCheckout = async (payload: GuestCheckoutPayload) => {
         classId: payload.classId,
         slotTitle: payload.slotTitle,
         slotId: payload.slotId,
+        coachId: payload.coachId,
+        sessionStart: payload.sessionStart,
         guestBooking: payload.guestBooking,
         successPath: payload.successPath || '/book',
       }),
@@ -192,6 +198,9 @@ export const handleCoachSlotCheckout = async (
         price: slot.price,
         memberId,
         participantName,
+        coachId: slot.coachId,
+        slotType: slot.type,
+        sessionStart: slot.start,
       }),
     });
 
@@ -216,5 +225,38 @@ export const handleCoachSlotCheckout = async (
   } catch (error) {
     console.error('Stripe checkout error:', error);
     return { success: false, error: error instanceof Error ? error.message : 'An unknown error occurred.' };
+  }
+};
+
+export interface FinalizedCheckoutSession {
+  success: boolean;
+  error?: string;
+  session?: {
+    id: string;
+    status: string | null;
+    payment_status: string | null;
+    amount_total: number | null;
+    currency: string | null;
+    metadata: Record<string, string | undefined>;
+  };
+}
+
+export const finalizeStripeCheckoutSession = async (sessionId: string): Promise<FinalizedCheckoutSession> => {
+  try {
+    const response = await fetch('/server-api/finalize-checkout-session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ sessionId }),
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || 'Failed to finalize checkout session.');
+    }
+    return response.json();
+  } catch (error) {
+    console.error('Failed to finalize checkout session:', error);
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
   }
 };

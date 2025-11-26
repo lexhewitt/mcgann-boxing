@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import Dashboard from './dashboard/Dashboard';
 import LandingPage from './LandingPage';
+import { finalizeStripeCheckoutSession } from '../services/stripeService';
 
 interface ConfirmationSummary {
   title?: string;
@@ -43,50 +44,83 @@ interface MainContentProps {
 
 const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
   const { currentUser } = useAuth();
-  const { addBooking, bookCoachSlot, coachSlots, members } = useData();
+  const { addBooking, bookCoachSlot, coachSlots, members, classes, coaches } = useData();
   const [confirmation, setConfirmation] = useState<ConfirmationState | null>(null);
   
   useEffect(() => {
-    // This effect runs on page load and checks if the user has been redirected
-    // back from a successful Stripe payment.
+    const finalizeFlow = async () => {
     const query = new URLSearchParams(window.location.search);
-
-    if (query.get('stripe_success')) {
+      if (!query.get('stripe_success')) {
+        return;
+      }
         if (!currentUser) {
-            // Wait until user context is restored before finalizing bookings
             return;
         }
-        const pendingBookingJSON = localStorage.getItem('pendingBooking');
-        
-        // Ensure there is a pending booking and a logged-in user to attribute it to.
-        if (pendingBookingJSON) {
-            try {
-                const pendingBooking: PendingClassPayload = JSON.parse(pendingBookingJSON);
-                
-                // Security check: ensure the booking belongs to the current user.
-                if (pendingBooking.memberId === currentUser.id) {
-                    addBooking({
+      const sessionId = query.get('session_id') || undefined;
+      let handled = false;
+
+      const completeClassBooking = (pendingBooking: PendingClassPayload) => {
+        if (pendingBooking.memberId !== currentUser.id) return;
+        addBooking(
+          {
                         memberId: pendingBooking.memberId,
                         participantId: pendingBooking.participantId,
                         classId: pendingBooking.classId,
                         sessionStart: pendingBooking.sessionStart,
                         stripeSessionId: pendingBooking.stripeSessionId,
-                        paid: true, // Payment was successful
-                    }, currentUser);
+            paid: true,
+          },
+          currentUser,
+        );
                     setConfirmation({
                       heading: 'Thank you! Your class is reserved.',
-                      message: 'Payment was received and your class booking has been added. Sean or your coach will confirm any remaining details shortly.',
+          message:
+            'Payment was received and your class booking has been added. Sean or your coach will confirm any remaining details shortly.',
                       summary: pendingBooking.summary ?? { type: 'CLASS' },
                     });
-                }
-            } catch (e) {
-                console.error("Error processing pending booking from localStorage:", e);
+        handled = true;
+      };
+
+      const completeSlotBooking = (pendingSlot: PendingSlotPayload) => {
+        if (pendingSlot.memberId !== currentUser.id) return;
+        const slotExists = coachSlots.find(slot => slot.id === pendingSlot.slotId);
+        const memberRecord = members.find(m => m.id === pendingSlot.memberId);
+        if (!slotExists || !memberRecord) {
+          console.warn('Pending slot or member not found; clearing pending state.');
+          setConfirmation({
+            heading: 'Payment received – scheduling shortly',
+            message:
+              'We could not auto-schedule your private session because availability data was still loading. Sean will confirm your requested slot as soon as possible.',
+            summary: pendingSlot.summary ?? { type: 'PRIVATE' },
+          });
+          return;
+        }
+        bookCoachSlot(
+          pendingSlot.slotId,
+          memberRecord,
+          pendingSlot.participantName || memberRecord.name,
+          pendingSlot.stripeSessionId,
+        );
+        setConfirmation({
+          heading: 'Thanks! Your private session request is in.',
+          message: 'Payment was successful. Sean or your coach will send a confirmation message shortly.',
+          summary: pendingSlot.summary ?? { type: 'PRIVATE', participantName: pendingSlot.participantName },
+        });
+        handled = true;
+      };
+
+      const pendingBookingJSON = localStorage.getItem('pendingBooking');
+      if (pendingBookingJSON) {
+        try {
+          const pendingBooking: PendingClassPayload = JSON.parse(pendingBookingJSON);
+          completeClassBooking(pendingBooking);
+        } catch (error) {
+          console.error('Error processing pending booking from localStorage:', error);
                 setConfirmation({
                   heading: 'Payment received – manual confirmation needed',
                   message: 'We logged your payment but could not auto-complete the booking. Sean has been notified and will confirm shortly.',
                 });
             } finally {
-                // Always remove the item from localStorage after processing.
                 localStorage.removeItem('pendingBooking');
             }
         }
@@ -95,41 +129,84 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
         if (pendingSlotJSON) {
             try {
                 const pendingSlot: PendingSlotPayload = JSON.parse(pendingSlotJSON);
-                if (pendingSlot.memberId === currentUser.id) {
-                    const slotExists = coachSlots.find(slot => slot.id === pendingSlot.slotId);
-                    const memberRecord = members.find(m => m.id === pendingSlot.memberId);
-                    if (!slotExists || !memberRecord) {
-                        console.warn('Pending slot or member not found; clearing pending state.');
-                        setConfirmation({
-                          heading: 'Payment received – scheduling shortly',
-                          message: 'We could not auto-schedule your private session because availability data was still loading. Sean will confirm your requested slot as soon as possible.',
-                          summary: pendingSlot.summary ?? { type: 'PRIVATE' },
-                        });
-                        localStorage.removeItem('pendingSlot');
-                        return;
-                    }
-                    bookCoachSlot(pendingSlot.slotId, memberRecord, pendingSlot.participantName || memberRecord.name, pendingSlot.stripeSessionId);
-                    setConfirmation({
-                      heading: 'Thanks! Your private session request is in.',
-                      message: 'Payment was successful. Sean or your coach will send a confirmation message shortly.',
-                      summary: pendingSlot.summary ?? { type: 'PRIVATE', participantName: pendingSlot.participantName },
-                    });
-                    localStorage.removeItem('pendingSlot');
-                }
+          completeSlotBooking(pendingSlot);
             } catch (error) {
                 console.error('Error processing pending slot booking:', error);
                 setConfirmation({
                   heading: 'Payment received – manual confirmation needed',
                   message: 'We were unable to auto-schedule this session, but Sean has been notified and will confirm manually.',
                 });
+        } finally {
                 localStorage.removeItem('pendingSlot');
             }
         }
         
-        // Clean up the URL to remove the query parameters.
+      if (!handled && sessionId) {
+        const result = await finalizeStripeCheckoutSession(sessionId);
+        if (result.success && result.session?.metadata) {
+          const metadata = result.session.metadata;
+          if (metadata.memberId === currentUser.id) {
+            if (metadata.flowType === 'CLASS' && metadata.classId && metadata.participantId) {
+              const gymClass = classes.find(cls => cls.id === metadata.classId);
+              const summary: ConfirmationSummary = {
+                type: 'CLASS',
+                title: metadata.className || gymClass?.name,
+                schedule: gymClass
+                  ? `${gymClass.day} ${gymClass.time}`
+                  : metadata.sessionStart
+                    ? new Date(metadata.sessionStart).toLocaleString()
+                    : undefined,
+                coachName: coaches.find(c => c.id === (gymClass?.coachId || metadata.coachId))?.name,
+                participantName: metadata.participantName,
+                price:
+                  gymClass?.price ??
+                  (typeof result.session.amount_total === 'number' ? result.session.amount_total / 100 : undefined),
+              };
+              completeClassBooking({
+                memberId: metadata.memberId,
+                participantId: metadata.participantId,
+                classId: metadata.classId,
+                sessionStart: metadata.sessionStart,
+                stripeSessionId: result.session.id,
+                summary,
+              });
+            } else if (metadata.flowType === 'COACH_SLOT' && metadata.slotId) {
+              const slot = coachSlots.find(s => s.id === metadata.slotId);
+              const summary: ConfirmationSummary = {
+                type: metadata.slotType === 'GROUP' ? 'CLASS' : 'PRIVATE',
+                title: metadata.slotTitle || slot?.title,
+                schedule: slot
+                  ? new Date(slot.start).toLocaleString()
+                  : metadata.sessionStart
+                    ? new Date(metadata.sessionStart).toLocaleString()
+                    : undefined,
+                coachName: coaches.find(c => c.id === (slot?.coachId || metadata.coachId))?.name,
+                participantName: metadata.participantName,
+                price:
+                  slot?.price ??
+                  (typeof result.session.amount_total === 'number' ? result.session.amount_total / 100 : undefined),
+              };
+              completeSlotBooking({
+                slotId: metadata.slotId,
+                memberId: metadata.memberId,
+                participantName: metadata.participantName || currentUser.name,
+                stripeSessionId: result.session.id,
+                summary,
+              });
+            }
+          }
+        } else if (result.error) {
+          console.error('Failed to finalize session from server:', result.error);
+        }
+      }
+
+      if (handled) {
         window.history.replaceState(null, '', window.location.pathname);
     }
-  }, [currentUser, addBooking, bookCoachSlot, coachSlots, members]);
+    };
+
+    finalizeFlow();
+  }, [currentUser, addBooking, bookCoachSlot, coachSlots, members, classes, coaches]);
 
 
   return (

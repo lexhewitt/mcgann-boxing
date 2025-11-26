@@ -1,7 +1,7 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
 import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole, ConfirmationStatus } from '../types';
 import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS, INITIAL_TRANSACTIONS, COACH_SLOTS, INITIAL_COACH_APPOINTMENTS } from '../constants';
-import { supabase } from '../services/supabaseClient';
+import { supabase, getSupabase } from '../services/supabaseClient';
 import { sendWhatsAppNotification } from '../services/notificationService';
 
 interface DataContextType {
@@ -34,7 +34,7 @@ interface DataContextType {
   updateBooking: (bookingId: string, newClassId: string, actor: AppUser) => void;
   toggleAttendance: (bookingId: string) => void;
   updateMember: (member: Member) => void;
-  addMember: (member: Omit<Member, 'id'>) => Member;
+  addMember: (member: Omit<Member, 'id'>) => Promise<Member>;
   deleteMember: (memberId: string) => void;
   addFamilyMember: (familyMember: Omit<FamilyMember, 'id'>) => void;
   deleteFamilyMember: (familyMemberId: string) => void;
@@ -73,20 +73,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [guestBookings, setGuestBookings] = useState<GuestBooking[]>([]);
   const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([]);
   useEffect(() => {
-    const loadFromSupabase = async () => {
-      if (!supabase) return;
+    const loadData = async () => {
+      try {
+        const response = await fetch('/server-api/bootstrap-data');
+        if (response.ok) {
+          const data = await response.json();
+          setCoaches(data.coaches);
+          setMembers(data.members);
+          setFamilyMembers(data.familyMembers);
+          setClasses(data.classes);
+          setBookings(data.bookings);
+          setCoachSlots(data.coachSlots);
+          setCoachAppointments(data.coachAppointments);
+          setTransactions(data.transactions);
+          setGuestBookings(data.guestBookings);
+          return;
+        }
+      } catch (error) {
+        console.error('Bootstrap data fetch failed', error);
+      }
+
+      const supabaseClient = getSupabase();
+      if (!supabaseClient) {
+        console.warn('Supabase client not available, using local data only');
+        return;
+      }
       try {
         const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes] =
           await Promise.all([
-            supabase.from('coaches').select('*'),
-            supabase.from('members').select('*'),
-            supabase.from('family_members').select('*'),
-            supabase.from('classes').select('*'),
-            supabase.from('bookings').select('*'),
-            supabase.from('coach_slots').select('*'),
-            supabase.from('coach_appointments').select('*'),
-            supabase.from('transactions').select('*'),
-            supabase.from('guest_bookings').select('*'),
+            supabaseClient.from('coaches').select('*'),
+            supabaseClient.from('members').select('*'),
+            supabaseClient.from('family_members').select('*'),
+            supabaseClient.from('classes').select('*'),
+            supabaseClient.from('bookings').select('*'),
+            supabaseClient.from('coach_slots').select('*'),
+            supabaseClient.from('coach_appointments').select('*'),
+            supabaseClient.from('transactions').select('*'),
+            supabaseClient.from('guest_bookings').select('*'),
           ]);
 
         if (!coachesRes.error && coachesRes.data) setCoaches(coachesRes.data as Coach[]);
@@ -173,7 +196,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     };
 
-    loadFromSupabase();
+    loadData();
   }, []);
   const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
@@ -808,11 +831,45 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setMembers(prev => prev.map(m => m.id === updatedMember.id ? updatedMember : m));
   };
   
-  const addMember = (newMemberData: Omit<Member, 'id'>) => {
+  const addMember = async (newMemberData: Omit<Member, 'id'>) => {
     const newMember: Member = { ...newMemberData, id: `m${Date.now()}` };
     setMembers(prev => [...prev, newMember]);
-    if (supabase) {
-      supabase.from('members').insert({
+    
+    // Get Supabase client (will use runtime env if available)
+    const supabaseClient = getSupabase();
+    
+    // Check runtime env values
+    const runtimeUrl = (window as any).__ENV__?.VITE_SUPABASE_URL;
+    const runtimeKey = (window as any).__ENV__?.VITE_SUPABASE_ANON_KEY;
+    const buildUrl = import.meta.env.VITE_SUPABASE_URL;
+    const buildKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    console.log('Supabase initialization check:', {
+      runtimeUrl,
+      runtimeKey: runtimeKey ? 'Present' : 'Missing',
+      buildUrl,
+      buildKey: buildKey ? 'Present' : 'Missing',
+      supabaseClient: supabaseClient ? 'Initialized' : 'NULL'
+    });
+    
+    if (!supabaseClient) {
+      console.error('Supabase client not initialized. Member not saved to database.');
+      console.error('Available env values:', {
+        VITE_SUPABASE_URL: runtimeUrl || buildUrl || 'NOT SET',
+        VITE_SUPABASE_ANON_KEY: runtimeKey || buildKey ? 'SET' : 'NOT SET'
+      });
+      alert('Database connection not available. Member added locally only.\n\nCheck browser console for details.');
+      return newMember;
+    }
+
+    try {
+      console.log('Attempting to insert member:', {
+        id: newMember.id,
+        name: newMember.name,
+        email: newMember.email
+      });
+      
+      const { error, data } = await supabaseClient.from('members').insert({
         id: newMember.id,
         name: newMember.name,
         email: newMember.email,
@@ -826,10 +883,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         membership_start_date: newMember.membershipStartDate,
         membership_expiry: newMember.membershipExpiry,
         is_rolling_monthly: newMember.isRollingMonthly,
-      }).then(({ error }) => {
-        if (error) console.error('Supabase: insert member failed', error.message);
-      });
+      }).select();
+
+      if (error) {
+        console.error('Supabase: insert member failed', error);
+        console.error('Error details:', JSON.stringify(error, null, 2));
+        alert(`Failed to save member to database: ${error.message}\n\nCheck browser console for details.`);
+        // Remove from local state if insert failed
+        setMembers(prev => prev.filter(m => m.id !== newMember.id));
+      } else {
+        console.log('Member successfully saved to Supabase:', data);
+      }
+    } catch (err) {
+      console.error('Unexpected error inserting member:', err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error('Error type:', err instanceof TypeError ? 'TypeError (likely network/CORS issue)' : 'Other error');
+      console.error('Full error:', err);
+      alert(`Failed to save member to database: ${errorMessage}\n\nThis might be a network or CORS issue. Check browser console for details.`);
+      setMembers(prev => prev.filter(m => m.id !== newMember.id));
     }
+    
     return newMember;
   };
   

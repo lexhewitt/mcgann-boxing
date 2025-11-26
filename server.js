@@ -6,13 +6,384 @@
 const express = require('express');
 const Stripe = require('stripe');
 const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const stripe = stripeSecretKey ? new Stripe(stripeSecretKey) : null;
+let supabaseAdmin = null;
 
+if (!stripeSecretKey) {
+  console.warn('⚠️  STRIPE_SECRET_KEY is not set. Payment features will not work.');
+}
+if (!stripeWebhookSecret) {
+  console.warn('⚠️  STRIPE_WEBHOOK_SECRET is not set. Webhook verification will be disabled.');
+}
+
+app.get('/env.js', (req, res) => {
+  const runtimeEnv = {
+    VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '',
+    VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || '',
+    STRIPE_PUBLISHABLE_KEY: process.env.STRIPE_PUBLISHABLE_KEY || '',
+  };
+  res.type('application/javascript');
+  res.send(`window.__ENV__ = ${JSON.stringify(runtimeEnv)};`);
+});
 // Create a dedicated router for API endpoints.
 // This is a robust way to ensure API routes are handled separately from static files.
 const apiRouter = express.Router();
+
+const bootstrapTables = async () => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    throw new Error('Supabase admin client not configured.');
+  }
+
+  const [
+    coachesRes,
+    membersRes,
+    familyRes,
+    classesRes,
+    bookingsRes,
+    slotsRes,
+    apptsRes,
+    txRes,
+    guestRes,
+  ] = await Promise.all([
+    supabase.from('coaches').select('*'),
+    supabase.from('members').select('*'),
+    supabase.from('family_members').select('*'),
+    supabase.from('classes').select('*'),
+    supabase.from('bookings').select('*'),
+    supabase.from('coach_slots').select('*'),
+    supabase.from('coach_appointments').select('*'),
+    supabase.from('transactions').select('*'),
+    supabase.from('guest_bookings').select('*'),
+  ]);
+
+  const ensureOk = (res, name) => {
+    if (res.error) {
+      throw new Error(`Supabase: ${name} query failed - ${res.error.message}`);
+    }
+    return res.data || [];
+  };
+
+  const mapBookings = (rows) =>
+    rows.map((b) => ({
+      id: b.id,
+      memberId: b.member_id,
+      participantId: b.participant_id || b.participant_family_id || b.member_id,
+      classId: b.class_id,
+      bookingDate: b.booking_date,
+      paid: b.paid,
+      attended: b.attended,
+      confirmationStatus: b.confirmation_status,
+      sessionStart: b.session_start,
+    }));
+
+  const mapSlots = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      coachId: row.coach_id,
+      type: row.type,
+      title: row.title,
+      description: row.description,
+      start: row.start,
+      end: row.end,
+      capacity: row.capacity,
+      price: Number(row.price),
+      location: row.location,
+    }));
+
+  const mapAppointments = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      slotId: row.slot_id,
+      memberId: row.member_id,
+      participantName: row.participant_name,
+      status: row.status,
+      createdAt: row.created_at,
+    }));
+
+  const mapTransactions = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      memberId: row.member_id,
+      coachId: row.coach_id,
+      bookingId: row.booking_id,
+      slotId: row.slot_id,
+      amount: Number(row.amount),
+      currency: row.currency,
+      source: row.source,
+      status: row.status,
+      description: row.description,
+      stripeSessionId: row.stripe_session_id,
+      createdAt: row.created_at,
+      settledAt: row.settled_at,
+      confirmationStatus: row.confirmation_status,
+    }));
+
+  const mapGuestBookings = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      serviceType: row.service_type,
+      referenceId: row.reference_id,
+      title: row.title,
+      date: row.date,
+      participantName: row.participant_name,
+      contactName: row.contact_name,
+      contactEmail: row.contact_email,
+      contactPhone: row.contact_phone,
+      status: row.status,
+      createdAt: row.created_at,
+    }));
+
+  return {
+    coaches: ensureOk(coachesRes, 'coaches'),
+    members: ensureOk(membersRes, 'members'),
+    familyMembers: ensureOk(familyRes, 'family members'),
+    classes: ensureOk(classesRes, 'classes'),
+    bookings: mapBookings(ensureOk(bookingsRes, 'bookings')),
+    coachSlots: mapSlots(ensureOk(slotsRes, 'coach slots')),
+    coachAppointments: mapAppointments(ensureOk(apptsRes, 'coach appointments')),
+    transactions: mapTransactions(ensureOk(txRes, 'transactions')),
+    guestBookings: mapGuestBookings(ensureOk(guestRes, 'guest bookings')),
+  };
+};
+
+apiRouter.get('/bootstrap-data', async (req, res) => {
+  try {
+    const data = await bootstrapTables();
+    res.json(data);
+  } catch (error) {
+    console.error('Bootstrap data fetch failed', error.message);
+    res.status(500).json({ error: 'Unable to load data from Supabase.' });
+  }
+});
+
+const getSupabaseAdmin = () => {
+  if (supabaseAdmin) return supabaseAdmin;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    console.warn('Supabase service role key or URL is not configured; Stripe webhooks will be disabled.');
+    return null;
+  }
+  supabaseAdmin = createClient(url, serviceKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  return supabaseAdmin;
+};
+
+const normalizeCurrency = (code) => (code ? code.toUpperCase() : 'GBP');
+const nowIso = () => new Date().toISOString();
+
+const upsertTransaction = async ({
+  stripeSessionId,
+  memberId,
+  coachId,
+  bookingId,
+  slotId,
+  amount,
+  currency,
+  source,
+  description,
+  confirmationStatus = 'PENDING',
+}) => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+
+  const { data: existing, error: existingError } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('stripe_session_id', stripeSessionId)
+    .maybeSingle();
+
+  if (existingError) {
+    console.error('Supabase: fetch transaction failed', existingError.message);
+    return null;
+  }
+
+  const payload = {
+    member_id: memberId || null,
+    coach_id: coachId || null,
+    booking_id: bookingId || null,
+    slot_id: slotId || null,
+    amount,
+    currency: normalizeCurrency(currency),
+    source,
+    status: 'PAID',
+    description,
+    stripe_session_id: stripeSessionId,
+    confirmation_status: confirmationStatus,
+    settled_at: nowIso(),
+  };
+
+  if (existing?.id) {
+    const { error: updateError } = await supabase
+      .from('transactions')
+      .update(payload)
+      .eq('id', existing.id);
+    if (updateError) {
+      console.error('Supabase: update transaction failed', updateError.message);
+    }
+    return existing.id;
+  }
+
+  const id = `tx-${Date.now()}`;
+  const { error: insertError } = await supabase.from('transactions').insert({
+    id,
+    created_at: nowIso(),
+    ...payload,
+  });
+  if (insertError) {
+    console.error('Supabase: insert transaction failed', insertError.message);
+    return null;
+  }
+  return id;
+};
+
+const ensureBooking = async ({ bookingId, memberId, participantId, classId, sessionStart }) => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const id = bookingId || `b${Date.now()}`;
+  const { data: existing, error } = await supabase
+    .from('bookings')
+    .select('id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    console.error('Supabase: fetch booking failed', error.message);
+    return id;
+  }
+  if (existing?.id) return existing.id;
+  const { error: insertError } = await supabase.from('bookings').insert({
+    id,
+    member_id: memberId || null,
+    participant_id: participantId || memberId || null,
+    class_id: classId || null,
+    paid: true,
+    attended: false,
+    confirmation_status: 'PENDING',
+    booking_date: nowIso(),
+    session_start: sessionStart || null,
+  });
+  if (insertError) {
+    console.error('Supabase: insert booking failed', insertError.message);
+  }
+  return id;
+};
+
+const ensureAppointment = async ({ slotId, memberId, participantName }) => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const id = `appt-${Date.now()}`;
+  const { error } = await supabase.from('coach_appointments').insert({
+    id,
+    slot_id: slotId || null,
+    member_id: memberId || null,
+    participant_name: participantName || '',
+    status: 'CONFIRMED',
+    created_at: nowIso(),
+  });
+  if (error) {
+    console.error('Supabase: insert coach appointment failed', error.message);
+  }
+  return id;
+};
+
+const ensureGuestBooking = async ({ serviceType, referenceId, title, date, participantName, contactName, contactEmail, contactPhone }) => {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) return null;
+  const id = `guest-${Date.now()}`;
+  const { error } = await supabase.from('guest_bookings').insert({
+    id,
+    service_type: serviceType || null,
+    reference_id: referenceId || null,
+    title: title || null,
+    date: date || null,
+    participant_name: participantName || null,
+    contact_name: contactName || null,
+    contact_email: contactEmail || null,
+    contact_phone: contactPhone || null,
+    status: 'PENDING',
+    created_at: nowIso(),
+  });
+  if (error) {
+    console.error('Supabase: insert guest booking failed', error.message);
+  }
+  return id;
+};
+
+const handleCheckoutSessionCompleted = async (session) => {
+  const metadata = session.metadata || {};
+  const amount = session.amount_total ? session.amount_total / 100 : undefined;
+  const currency = session.currency || 'GBP';
+  const flowType = metadata.flowType || (metadata.slotId ? 'COACH_SLOT' : metadata.guestBooking ? 'GUEST' : 'CLASS');
+
+  const basePayload = {
+    stripeSessionId: session.id,
+    memberId: metadata.memberId,
+    coachId: metadata.coachId,
+    amount,
+    currency,
+    description: metadata.slotTitle || metadata.className || metadata.slotId || metadata.classId,
+  };
+
+  if (flowType === 'CLASS') {
+    const bookingId = await ensureBooking({
+      bookingId: metadata.bookingId,
+      memberId: metadata.memberId,
+      participantId: metadata.participantId,
+      classId: metadata.classId,
+      sessionStart: metadata.sessionStart,
+    });
+    await upsertTransaction({
+      ...basePayload,
+      bookingId,
+      source: 'CLASS',
+      confirmationStatus: 'PENDING',
+    });
+    console.log(`[Stripe] Class booking recorded for class ${metadata.classId}, member ${metadata.memberId}`);
+    return;
+  }
+
+  if (flowType === 'COACH_SLOT') {
+    const appointmentId = await ensureAppointment({
+      slotId: metadata.slotId,
+      memberId: metadata.memberId,
+      participantName: metadata.participantName,
+    });
+    await upsertTransaction({
+      ...basePayload,
+      slotId: metadata.slotId,
+      source: metadata.slotType === 'GROUP' ? 'GROUP_SESSION' : 'PRIVATE_SESSION',
+      confirmationStatus: 'PENDING',
+    });
+    console.log(`[Stripe] Coach slot booked for slot ${metadata.slotId}, appointment ${appointmentId || 'n/a'}`);
+    return;
+  }
+
+  // Treat everything else as a guest purchase
+  await ensureGuestBooking({
+    serviceType: metadata.classId ? 'CLASS' : 'PRIVATE',
+    referenceId: metadata.classId || metadata.slotId,
+    title: metadata.className || metadata.slotTitle || 'Guest Booking',
+    date: metadata.sessionStart,
+    participantName: metadata.participantName || metadata.guestName,
+    contactName: metadata.guestContactName,
+    contactEmail: metadata.guestContactEmail,
+    contactPhone: metadata.guestContactPhone,
+  });
+  await upsertTransaction({
+    ...basePayload,
+    source: metadata.classId ? 'CLASS' : 'PRIVATE_SESSION',
+    confirmationStatus: 'PENDING',
+  });
+  console.log(`[Stripe] Guest booking recorded for reference ${metadata.classId || metadata.slotId}`);
+};
 
 
 // --- API Route Definitions ---
@@ -30,15 +401,13 @@ apiRouter.get('/stripe-config', (req, res) => {
 // POST /server-api/create-checkout-session
 // We add the express.json() middleware here specifically for this route
 apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    console.error('Stripe secret key is not set in environment variables.');
-    return res.status(500).json({ error: 'Server configuration error.' });
+  if (!stripe) {
+    console.error('Stripe is not initialized. Check STRIPE_SECRET_KEY environment variable.');
+    return res.status(500).json({ error: 'Payment system not configured.' });
   }
-  const stripe = new Stripe(secretKey);
   
   try {
-    const { className, classId, price, participantId, memberId, slotId, slotTitle, participantName, guestBooking, successPath } = req.body;
+    const { className, classId, price, participantId, memberId, slotId, slotTitle, participantName, guestBooking, successPath, coachId, sessionStart, slotType } = req.body;
 
     if (price === undefined || (!memberId && !guestBooking)) {
       return res.status(400).json({ error: 'Missing required session parameters.' });
@@ -50,10 +419,32 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
     const protocol = req.get('x-forwarded-proto') || req.protocol;
     const derivedBase = `${protocol}://${host}`;
     const baseUrl = process.env.FRONTEND_URL || derivedBase.replace(':8080', ':3000');
-    const redirectPath = successPath || '';
+    const redirectPath = successPath ?? '';
+    const normalizedPath = redirectPath.startsWith('/') || redirectPath === '' ? redirectPath : `/${redirectPath}`;
+    const separator = normalizedPath.includes('?') ? '&' : '?';
+    const successUrl = `${baseUrl}${normalizedPath}${separator}stripe_success=true&session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${baseUrl}${normalizedPath}${separator}stripe_canceled=true`;
 
     const displayName = className || slotTitle || 'Fleetwood Boxing Session';
     const description = className ? 'Fleetwood Boxing Gym Class Booking' : 'Private/Group session booking';
+    const flowType = slotId ? 'COACH_SLOT' : guestBooking ? 'GUEST' : 'CLASS';
+    const metadata = {
+      flowType,
+      classId: classId || '',
+      className: className || '',
+      slotId: slotId || '',
+      slotTitle: slotTitle || '',
+      slotType: slotType || '',
+      coachId: coachId || '',
+      memberId: memberId || '',
+      participantId: participantId || '',
+      participantName: participantName || guestBooking?.participantName || '',
+      sessionStart: sessionStart || '',
+      guestContactName: guestBooking?.contactName || '',
+      guestContactEmail: guestBooking?.contactEmail || '',
+      guestContactPhone: guestBooking?.contactPhone || '',
+      guestBooking: guestBooking ? JSON.stringify(guestBooking) : '',
+    };
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -69,9 +460,9 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${baseUrl}${redirectPath}?stripe_success=true`,
-      cancel_url: `${baseUrl}${redirectPath}`,
-      metadata: { classId: classId || '', participantId: participantId || '', participantName: participantName || '', memberId: memberId || '', slotId: slotId || '', guestBooking: guestBooking ? JSON.stringify(guestBooking) : '' },
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata,
     });
 
     res.status(200).json({ id: session.id });
@@ -81,12 +472,47 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
   }
 });
 
-apiRouter.post('/refund-session', express.json(), async (req, res) => {
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  if (!secretKey) {
-    return res.status(500).json({ error: 'Stripe secret key is not configured.' });
+apiRouter.post('/finalize-checkout-session', express.json(), async (req, res) => {
+  if (!stripe) {
+    console.error('Stripe is not initialized. Cannot finalize checkout session.');
+    return res.status(500).json({ error: 'Payment system not configured.' });
   }
-  const stripe = new Stripe(secretKey);
+  const { sessionId } = req.body;
+  if (!sessionId) {
+    return res.status(400).json({ error: 'Missing sessionId.' });
+  }
+  try {
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Checkout session not found.' });
+    }
+    try {
+      await handleCheckoutSessionCompleted(session);
+    } catch (processingError) {
+      console.error('Error ensuring checkout session completion:', processingError.message);
+    }
+    return res.json({
+      success: true,
+      session: {
+        id: session.id,
+        status: session.status,
+        payment_status: session.payment_status,
+        amount_total: session.amount_total,
+        currency: session.currency,
+        metadata: session.metadata,
+      },
+    });
+  } catch (error) {
+    console.error('Failed to finalize checkout session:', error.message);
+    return res.status(500).json({ error: error.message || 'Unable to finalize checkout session.' });
+  }
+});
+
+// POST /server-api/refund-session
+apiRouter.post('/refund-session', express.json(), async (req, res) => {
+  if (!stripe) {
+    return res.status(500).json({ error: 'Payment system not configured.' });
+  }
   const { sessionId } = req.body;
   if (!sessionId) {
     return res.status(400).json({ error: 'Missing sessionId.' });
@@ -106,6 +532,34 @@ apiRouter.post('/refund-session', express.json(), async (req, res) => {
   }
 });
 
+// Stripe Webhook endpoint
+apiRouter.post('/stripe-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !stripeWebhookSecret) {
+    console.error('Stripe webhook is not configured. Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET.');
+    return res.status(500).send('Webhook not configured.');
+  }
+
+  const signature = req.headers['stripe-signature'];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, signature, stripeWebhookSecret);
+  } catch (err) {
+    console.error('Stripe webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === 'checkout.session.completed') {
+    try {
+      await handleCheckoutSessionCompleted(event.data.object);
+    } catch (error) {
+      console.error('Error handling checkout session completion:', error.message);
+      return res.status(500).send('Failed to process event.');
+    }
+  }
+
+  res.json({ received: true });
+});
 
 // --- Middleware & Route Registration ---
 

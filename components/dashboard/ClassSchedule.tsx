@@ -103,6 +103,7 @@ const ClassSchedule: React.FC<ClassScheduleProps> = ({ viewMode = 'weekly' }) =>
         
         // Call the Stripe service, which will redirect the user.
         const paymentResult = await handleStripeCheckout(classToBook, participant, currentUser.id, {
+          sessionStart: sessionDate.toISOString(),
           onSessionCreated: (sessionId) => {
             pendingBooking.stripeSessionId = sessionId;
             localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));

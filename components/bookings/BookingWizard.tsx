@@ -3,7 +3,7 @@ import { useData } from '../../context/DataContext';
 import { CoachSlot, SlotType, GuestBooking } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { handleGuestCheckout } from '../../services/stripeService';
+import { handleGuestCheckout, finalizeStripeCheckoutSession } from '../../services/stripeService';
 
 interface BookableItem {
   id: string;
@@ -13,6 +13,7 @@ interface BookableItem {
   date: Date;
   price: number;
   coachName?: string;
+  coachId?: string;
   classId?: string;
   slotId?: string;
 }
@@ -78,6 +79,7 @@ const BookingWizard: React.FC = () => {
               date: startDate,
               price: cls.price,
               coachName: coach?.name,
+              coachId: cls.coachId,
               classId: cls.id,
             });
           }
@@ -103,6 +105,7 @@ const BookingWizard: React.FC = () => {
           date: new Date(slot.start),
           price: slot.price,
           coachName: coach?.name,
+          coachId: slot.coachId,
           slotId: slot.id,
         } as BookableItem;
       });
@@ -140,8 +143,12 @@ const BookingWizard: React.FC = () => {
   }, [serviceFilter, coachFilter]);
 
   useEffect(() => {
+    const finalizeGuestFlow = async () => {
     const query = new URLSearchParams(window.location.search);
-    if (query.get('stripe_success')) {
+      if (!query.get('stripe_success')) {
+        return;
+      }
+      let handled = false;
       const pending = localStorage.getItem('pendingGuestBooking');
       if (pending) {
         try {
@@ -157,15 +164,59 @@ const BookingWizard: React.FC = () => {
             contactPhone: payload.contactPhone,
           };
           addGuestBooking(entry);
-          setSuccessMessage(`Thanks ${payload.contactName}! Your booking for ${payload.title} on ${formatDate(new Date(payload.date))} is confirmed.`);
+          setSuccessMessage(
+            `Thanks ${payload.contactName}! Your booking for ${payload.title} on ${formatDate(new Date(payload.date))} is confirmed.`,
+          );
+          handled = true;
         } catch (error) {
-          console.error('Failed to finalize guest booking', error);
+          console.error('Failed to finalize guest booking from localStorage', error);
         } finally {
           localStorage.removeItem('pendingGuestBooking');
-          window.history.replaceState(null, '', '/book');
         }
       }
-    }
+
+      if (!handled) {
+        const sessionId = query.get('session_id');
+        if (sessionId) {
+          const result = await finalizeStripeCheckoutSession(sessionId);
+          if (result.success && result.session?.metadata) {
+            try {
+              const metadata = result.session.metadata;
+              const guestPayload = metadata.guestBooking ? JSON.parse(metadata.guestBooking) : null;
+              if (guestPayload) {
+                const entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'> = {
+                  serviceType: metadata.classId ? 'CLASS' : 'PRIVATE',
+                  referenceId: metadata.classId || metadata.slotId || '',
+                  title: metadata.className || metadata.slotTitle || 'Guest Booking',
+                  date: metadata.sessionStart,
+                  participantName: guestPayload.participantName || metadata.participantName,
+                  contactName: guestPayload.contactName,
+                  contactEmail: guestPayload.contactEmail,
+                  contactPhone: guestPayload.contactPhone,
+                };
+                addGuestBooking(entry);
+                if (entry.title && entry.date) {
+                  setSuccessMessage(
+                    `Thanks ${entry.contactName}! Your booking for ${entry.title} on ${formatDate(new Date(entry.date))} is confirmed.`,
+                  );
+                } else {
+                  setSuccessMessage('Thanks! Your booking and payment have been received.');
+                }
+                handled = true;
+              }
+            } catch (error) {
+              console.error('Failed to parse guest booking metadata', error);
+            }
+          } else if (result.error) {
+            console.error('Unable to finalize guest booking session:', result.error);
+          }
+        }
+      }
+
+      window.history.replaceState(null, '', '/book');
+    };
+
+    finalizeGuestFlow();
   }, [addGuestBooking]);
 
   const startCheckout = async () => {
@@ -189,6 +240,8 @@ const BookingWizard: React.FC = () => {
       classId: selectedItem.classId,
       slotTitle: selectedItem.type === 'PRIVATE' ? selectedItem.title : undefined,
       slotId: selectedItem.slotId,
+      coachId: selectedItem.coachId,
+      sessionStart: selectedItem.date.toISOString(),
       guestBooking: {
         participantName,
         participantDob: participantDob || undefined,

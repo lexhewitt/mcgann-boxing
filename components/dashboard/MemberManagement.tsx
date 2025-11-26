@@ -36,7 +36,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -51,14 +51,19 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
         return;
     }
 
-    addMember({
-      ...formData,
-      role: UserRole.MEMBER,
-      coachId: formData.coachId || null,
-    });
-    
-    setFormData(initialFormData); // Reset form
-    onClose();
+    try {
+      await addMember({
+        ...formData,
+        role: UserRole.MEMBER,
+        coachId: formData.coachId || null,
+      });
+      
+      setFormData(initialFormData); // Reset form
+      onClose();
+    } catch (error) {
+      console.error('Error adding member:', error);
+      setError('Failed to add member. Please try again.');
+    }
   };
 
   return (
