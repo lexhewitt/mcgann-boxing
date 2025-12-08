@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { GymClass, UserRole, NotificationStatus, Coach } from '../../types';
@@ -7,10 +7,13 @@ import CoachCard from '../ui/CoachCard';
 import CoachAvailabilityManager from './CoachAvailabilityManager';
 import ClassDetailsModal from './ClassDetailsModal';
 import CalendarView from './CalendarView';
+import CoachScheduleView from './CoachScheduleView';
 import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
+import WhatsAppControlPanel from './WhatsAppControlPanel';
+import AvatarUpload from './AvatarUpload';
 
-type CoachTab = 'classes' | 'calendar' | 'availability' | 'notifications' | 'financials';
+type CoachTab = 'classes' | 'calendar' | 'availability' | 'notifications' | 'financials' | 'whatsapp';
 
 interface CoachDashboardProps {
   coachToView?: Coach;
@@ -19,11 +22,17 @@ interface CoachDashboardProps {
 
 const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     const { currentUser } = useAuth();
-    const { classes, bookings, notifications, bookingAlerts } = useData();
+    const { classes, bookings, notifications, bookingAlerts, updateCoach, coaches } = useData();
     const [selectedClass, setSelectedClass] = useState<GymClass | null>(null);
     const [activeTab, setActiveTab] = useState<CoachTab>('classes');
 
-    const coachForDashboard = coachToView || (currentUser?.role !== UserRole.MEMBER ? currentUser : null);
+    // Get the coach from the coaches array to ensure we have the latest data
+    const coachForDashboard = useMemo(() => {
+        const targetCoach = coachToView || (currentUser?.role !== UserRole.MEMBER ? currentUser : null);
+        if (!targetCoach) return null;
+        // Find the latest version from the coaches array
+        return coaches.find(c => c.id === targetCoach.id) || targetCoach;
+    }, [coachToView, currentUser, coaches]);
 
     if (!coachForDashboard) return null;
 
@@ -92,8 +101,8 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
             case 'calendar':
                 return (
                     <div>
-                        <h2 className="text-2xl font-semibold text-white mb-4">My Calendar</h2>
-                        <CalendarView coachId={coachForDashboard.id} />
+                        <h2 className="text-2xl font-semibold text-white mb-4">My Schedule</h2>
+                        <CoachScheduleView coachId={coachForDashboard.id} />
                     </div>
                 );
             case 'availability':
@@ -102,6 +111,13 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                 return <NotificationsPanel user={coachForDashboard} />;
             case 'financials':
                 return <FinancialsDashboard user={coachForDashboard} />;
+            case 'whatsapp':
+                return (
+                    <WhatsAppControlPanel 
+                        coach={coachForDashboard as Coach} 
+                        onUpdateCoach={updateCoach}
+                    />
+                );
             default:
                 return null;
         }
@@ -112,7 +128,25 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
             
             <div>
                 <h2 className="text-2xl font-semibold text-white mb-4">My Profile</h2>
-                <CoachCard coach={coachForDashboard as Coach} />
+                <div className="bg-brand-dark p-6 rounded-lg mb-4">
+                    <AvatarUpload
+                        key={coachForDashboard.id + (coachForDashboard.imageUrl || '')}
+                        coach={coachForDashboard as Coach}
+                        onAvatarUpdated={async (imageUrl) => {
+                            const updatedCoach = { ...coachForDashboard, imageUrl } as Coach;
+                            await updateCoach(updatedCoach);
+                            // Force a small delay to ensure state updates
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                        }}
+                    />
+                </div>
+                <div className="bg-brand-gray rounded-lg overflow-hidden shadow-lg p-6">
+                    <div className="text-center">
+                        <h3 className="text-xl font-bold text-white">{coachForDashboard.name}</h3>
+                        <p className="text-brand-red font-semibold">{coachForDashboard.level}</p>
+                        <p className="text-gray-300 mt-2 text-sm">{coachForDashboard.bio}</p>
+                    </div>
+                </div>
                 <div className="bg-brand-dark p-4 rounded-lg mt-4 text-sm">
                     <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-700 pb-1">Private Details</h3>
                     <div className="text-gray-400 space-y-1">
@@ -128,6 +162,7 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                 <TabButton tabName="availability" label="Manage Availability" />
                 <TabButton tabName="financials" label="Financials" />
                 <TabButton tabName="notifications" label="Notifications" count={pendingNotificationsCount} />
+                <TabButton tabName="whatsapp" label="WhatsApp" />
             </div>
             <div className="bg-brand-gray p-6 rounded-b-lg -mt-8">
                 {renderContent()}

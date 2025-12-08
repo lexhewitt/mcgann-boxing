@@ -24,6 +24,8 @@ const AddClassModal: React.FC<AddClassModalProps> = ({ isOpen, onClose }) => {
   const [startTime, setStartTime] = useState('17:00');
   const [endTime, setEndTime] = useState('18:00');
   const [error, setError] = useState('');
+  const [isRecurring, setIsRecurring] = useState(true);
+  const [selectedDays, setSelectedDays] = useState<string[]>(['Monday']);
   
   const timeOptions = useMemo(() => {
     const options = [];
@@ -42,6 +44,14 @@ const AddClassModal: React.FC<AddClassModalProps> = ({ isOpen, onClose }) => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleDayToggle = (day: string) => {
+    setSelectedDays(prev => 
+      prev.includes(day) 
+        ? prev.filter(d => d !== day)
+        : [...prev, day]
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -53,35 +63,51 @@ const AddClassModal: React.FC<AddClassModalProps> = ({ isOpen, onClose }) => {
     
     const combinedTime = `${startTime} – ${endTime}`;
 
-    if (!formData.name || !formData.day || !formData.coachId || !formData.capacity || !formData.price) {
+    if (!formData.name || !formData.coachId || !formData.capacity || !formData.price) {
       setError("All fields except description are required.");
       return;
     }
-    
-    const nextClassDate = getNextDateForDay(formData.day);
-    const coachIsAvailableCheck = isCoachAvailable({
-        coachId: formData.coachId,
-        day: formData.day,
-        time: combinedTime,
-        allClasses: classes,
-        coachAvailability,
-        unavailableSlots,
-        checkDate: nextClassDate,
-    });
 
-    if (!coachIsAvailableCheck.isAvailable) {
-        setError(coachIsAvailableCheck.reason);
-        return;
+    if (isRecurring && selectedDays.length === 0) {
+      setError("Please select at least one day for recurring classes.");
+      return;
     }
 
-    addClass({
-      ...formData,
-      time: combinedTime,
-      capacity: parseInt(String(formData.capacity), 10),
-      price: parseFloat(String(formData.price)),
+    const daysToCreate = isRecurring ? selectedDays : [formData.day];
+    
+    // Check availability for each day
+    for (const day of daysToCreate) {
+      const nextClassDate = getNextDateForDay(day as typeof daysOfWeek[number]);
+      const coachIsAvailableCheck = isCoachAvailable({
+          coachId: formData.coachId,
+          day: day as typeof daysOfWeek[number],
+          time: combinedTime,
+          allClasses: classes,
+          coachAvailability,
+          unavailableSlots,
+          checkDate: nextClassDate,
+      });
+
+      if (!coachIsAvailableCheck.isAvailable) {
+          setError(`Coach unavailable on ${day}: ${coachIsAvailableCheck.reason}`);
+          return;
+      }
+    }
+
+    // Create class for each selected day
+    daysToCreate.forEach(day => {
+      addClass({
+        ...formData,
+        day: day as typeof daysOfWeek[number],
+        time: combinedTime,
+        capacity: parseInt(String(formData.capacity), 10),
+        price: parseFloat(String(formData.price)),
+      });
     });
     
     setFormData(initialFormData); // Reset form
+    setSelectedDays(['Monday']);
+    setIsRecurring(true);
     onClose();
   };
   
@@ -97,10 +123,55 @@ const AddClassModal: React.FC<AddClassModalProps> = ({ isOpen, onClose }) => {
           <textarea id="add-class-desc" name="description" value={formData.description} onChange={handleChange} rows={3} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500"></textarea>
         </div>
         <div>
-          <label htmlFor="add-class-day" className="block text-sm font-medium text-gray-300 mb-1">Day</label>
-          <select id="add-class-day" name="day" value={formData.day} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-            {daysOfWeek.map(day => <option key={day} value={day}>{day}</option>)}
-          </select>
+          <div className="flex items-center gap-2 mb-3">
+            <input
+              type="checkbox"
+              id="is-recurring"
+              checked={isRecurring}
+              onChange={(e) => {
+                setIsRecurring(e.target.checked);
+                if (!e.target.checked) {
+                  setSelectedDays([formData.day]);
+                }
+              }}
+              className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
+            />
+            <label htmlFor="is-recurring" className="text-sm font-medium text-gray-300">
+              This is a recurring class
+            </label>
+          </div>
+          
+          {isRecurring ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Select Days (can select multiple)</label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {daysOfWeek.map(day => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => handleDayToggle(day)}
+                    className={`p-3 rounded-lg border-2 transition-all text-center ${
+                      selectedDays.includes(day)
+                        ? 'border-brand-red bg-brand-red/20 text-white'
+                        : 'border-gray-600 bg-brand-dark text-gray-300 hover:border-gray-500'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+              {selectedDays.length > 0 && (
+                <p className="text-sm text-gray-400 mt-2">Selected: {selectedDays.join(', ')}</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label htmlFor="add-class-day" className="block text-sm font-medium text-gray-300 mb-1">Day</label>
+              <select id="add-class-day" name="day" value={formData.day} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
+                {daysOfWeek.map(day => <option key={day} value={day}>{day}</option>)}
+              </select>
+            </div>
+          )}
         </div>
          <div className="grid grid-cols-2 gap-4">
           <div>

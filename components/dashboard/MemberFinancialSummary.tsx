@@ -52,14 +52,14 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
   const lifetimeSpend = settled.reduce((sum, tx) => sum + tx.amount, 0);
 
   return (
-    <div className="bg-brand-gray p-6 rounded-lg space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between mb-2">
         <div>
           <p className="text-sm text-gray-400 uppercase tracking-wide">Member Financials</p>
           <h2 className="text-2xl font-bold text-white">{member.name}</h2>
           <p className="text-sm text-gray-400">{member.email}</p>
         </div>
-        {!embedded && (
+        {!embedded && onClose && (
           <button
             className="text-sm text-brand-red font-semibold hover:underline"
             onClick={onClose}
@@ -111,6 +111,7 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
                     <th className="py-2 pr-3">Date</th>
                     <th className="py-2 pr-3">Description</th>
                     <th className="py-2 pr-3">Status</th>
+                    <th className="py-2 pr-3">Payment Method</th>
                     <th className="py-2 pr-3 text-right">Amount</th>
                   </tr>
                 </thead>
@@ -125,8 +126,20 @@ const MemberFinancialSummary: React.FC<MemberFinancialSummaryProps> = ({
                         {tx.description || 'Payment'}
                       </td>
                       <td className="py-2 pr-3">
-                        <span className="px-2 py-0.5 rounded bg-green-600 text-xs text-white uppercase tracking-wide">
-                          Confirmed
+                        <div className="flex flex-col gap-1">
+                          <span className="px-2 py-0.5 rounded bg-green-600 text-xs text-white uppercase tracking-wide w-fit">
+                            {tx.status === TransactionStatus.PAID ? 'Paid' : tx.status}
+                          </span>
+                          {tx.settledAt && (
+                            <span className="text-xs text-gray-400">
+                              Settled: {new Date(tx.settledAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <span className="text-xs text-gray-300">
+                          {tx.stripeSessionId ? '💳 Stripe (Card)' : '💵 Manual/Cash'}
                         </span>
                       </td>
                       <td className="py-2 pr-3 text-right font-semibold">£{tx.amount.toFixed(2)}</td>

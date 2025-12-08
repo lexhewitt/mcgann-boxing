@@ -34,6 +34,8 @@ export interface Coach extends User {
   imageUrl: string;
   mobileNumber?: string;
   bankDetails?: string; // e.g., Sort Code, Account Number
+  whatsappAutoReplyEnabled?: boolean; // Default true, allows coach to disable auto-replies
+  whatsappAutoReplyMessage?: string; // Custom auto-reply message (optional, uses default if not set)
 }
 
 export type AppUser = Member | Coach;

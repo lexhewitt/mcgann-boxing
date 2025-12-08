@@ -29,7 +29,7 @@ interface DataContextType {
   deleteAvailabilitySlot: (slotId: string) => void;
   addUnavailableSlot: (slot: Omit<UnavailableSlot, 'id'>) => void;
   deleteUnavailableSlot: (slotId: string) => void;
-  addBooking: (booking: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => void;
+  addBooking: (booking: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => Promise<void>;
   deleteBooking: (bookingId: string, actor: AppUser) => Promise<void>;
   updateBooking: (bookingId: string, newClassId: string, actor: AppUser) => void;
   toggleAttendance: (bookingId: string) => void;
@@ -38,7 +38,7 @@ interface DataContextType {
   deleteMember: (memberId: string) => void;
   addFamilyMember: (familyMember: Omit<FamilyMember, 'id'>) => void;
   deleteFamilyMember: (familyMemberId: string) => void;
-  updateCoach: (coach: Coach) => void;
+  updateCoach: (coach: Coach) => Promise<void>;
   addCoach: (coach: Omit<Coach, 'id'>) => Coach;
   deleteCoach: (coachId: string) => void;
   updateClass: (gymClass: GymClass) => void;
@@ -46,8 +46,8 @@ interface DataContextType {
   deleteClass: (classId: string) => void;
   addTransaction: (transaction: Omit<Transaction, 'id' | 'currency' | 'createdAt'> & { currency?: Transaction['currency'] }) => Transaction;
   updateTransaction: (transactionId: string, updates: Partial<Transaction>) => void;
-  bookCoachSlot: (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => void;
-  addGuestBooking: (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => void;
+  bookCoachSlot: (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => Promise<void>;
+  addGuestBooking: (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => Promise<void>;
   cancelBooking: (bookingId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => Promise<{ success: boolean; message: string }>;
   cancelCoachAppointment: (appointmentId: string, actor: AppUser, options?: { allowLate?: boolean; issueRefund?: boolean }) => Promise<{ success: boolean; message: string }>;
   cancelGuestBooking: (guestBookingId: string, actor: AppUser, options?: { allowLate?: boolean }) => Promise<{ success: boolean; message: string }>;
@@ -112,7 +112,22 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             supabaseClient.from('guest_bookings').select('*'),
           ]);
 
-        if (!coachesRes.error && coachesRes.data) setCoaches(coachesRes.data as Coach[]);
+        if (!coachesRes.error && coachesRes.data) {
+          const mapped = (coachesRes.data as any[]).map(row => ({
+            id: row.id,
+            name: row.name,
+            email: row.email,
+            role: row.role,
+            level: row.level,
+            bio: row.bio,
+            imageUrl: row.image_url,
+            mobileNumber: row.mobile_number,
+            bankDetails: row.bank_details,
+            whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
+            whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
+          })) as Coach[];
+          setCoaches(mapped);
+        }
         if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
         if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
         if (!classesRes.error && classesRes.data) setClasses(classesRes.data as GymClass[]);
@@ -329,7 +344,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const notifyCoachAndOwner = (
+  const notifyCoachAndOwner = async (
     coachId: string, 
     message: string,
     meta?: Partial<Omit<BookingAlert, 'id' | 'timestamp' | 'coachId' | 'message' | 'status'>>
@@ -339,11 +354,11 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const coach = coaches.find(c => c.id === coachId);
     if (coach?.mobileNumber) {
-      sendWhatsAppNotification(coach.mobileNumber, message);
+      await sendWhatsAppNotification(coach.mobileNumber, message);
     }
     const owner = coaches.find(c => c.id === ownerId);
     if (owner?.mobileNumber && owner.id !== coachId) {
-      sendWhatsAppNotification(owner.mobileNumber, message);
+      await sendWhatsAppNotification(owner.mobileNumber, message);
     }
   };
 
@@ -362,7 +377,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } : alert));
   };
 
-  const bookCoachSlot = (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => {
+  const bookCoachSlot = async (slotId: string, member: Member, participantName: string, stripeSessionId?: string) => {
     const slot = coachSlots.find(s => s.id === slotId);
     if (!slot) return;
 
@@ -410,7 +425,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const message = `Client: ${participantName} booked ${slot.title} on ${new Date(slot.start).toLocaleString()}. Please confirm.`;
-    notifyCoachAndOwner(slot.coachId, message, {
+    await notifyCoachAndOwner(slot.coachId, message, {
       serviceType: slot.type === SlotType.PRIVATE ? 'PRIVATE' : 'CLASS',
       referenceId: slot.id,
       participantName,
@@ -419,7 +434,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addGuestBooking = (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => {
+  const addGuestBooking = async (entry: Omit<GuestBooking, 'id' | 'status' | 'createdAt'>) => {
     const booking: GuestBooking = {
       id: `guest-${Date.now()}`,
       status: 'PENDING',
@@ -449,7 +464,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const gymClass = classes.find(cls => cls.id === entry.referenceId);
         if (gymClass) {
           const message = `Client: ${entry.participantName} booked ${gymClass.name} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
-          notifyCoachAndOwner(gymClass.coachId, message, {
+          await notifyCoachAndOwner(gymClass.coachId, message, {
             serviceType: 'CLASS',
             referenceId: gymClass.id,
             participantName: entry.participantName,
@@ -461,7 +476,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const slot = coachSlots.find(slot => slot.id === entry.referenceId);
         if (slot) {
           const message = `Client: ${entry.participantName} booked ${slot.title} on ${new Date(entry.date).toLocaleString()}. Please confirm.`;
-          notifyCoachAndOwner(slot.coachId, message, {
+          await notifyCoachAndOwner(slot.coachId, message, {
             serviceType: 'PRIVATE',
             referenceId: slot.id,
             participantName: entry.participantName,
@@ -525,7 +540,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     if (gymClass) {
       const notifyMessage = `Cancellation: ${participant?.name ?? 'Participant'} withdrew from ${gymClass.name} (${gymClass.day} ${gymClass.time}). ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`;
-      notifyCoachAndOwner(gymClass.coachId, notifyMessage);
+      await notifyCoachAndOwner(gymClass.coachId, notifyMessage);
     }
 
     return {
@@ -586,7 +601,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
 
     const notifyMessage = `Cancellation: ${appointment.participantName} withdrew from ${slot.title} on ${new Date(slot.start).toLocaleString()}. ${shouldRefund ? 'Refund issued.' : 'Late cancellation - no refund.'}`;
-    notifyCoachAndOwner(slot.coachId, notifyMessage);
+    await notifyCoachAndOwner(slot.coachId, notifyMessage);
 
     return {
       success: true,
@@ -727,7 +742,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
 
-  const addBooking = (bookingInput: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => {
+  const addBooking = async (bookingInput: Omit<Booking, 'id' | 'bookingDate'> & { stripeSessionId?: string }, actor: AppUser) => {
     const { stripeSessionId, ...booking } = bookingInput;
     const newBooking: Booking = {
       ...booking,
@@ -773,7 +788,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         });
 
         const message = `Client: ${participant.name} booked ${gymClass.name} (${gymClass.day} ${gymClass.time}). Please confirm.`;
-        notifyCoachAndOwner(gymClass.coachId, message, {
+        await notifyCoachAndOwner(gymClass.coachId, message, {
           serviceType: 'CLASS',
           referenceId: gymClass.id,
           participantName: participant.name,
@@ -925,8 +940,29 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
 
-  const updateCoach = (updatedCoach: Coach) => {
+  const updateCoach = async (updatedCoach: Coach) => {
     setCoaches(prev => prev.map(c => c.id === updatedCoach.id ? updatedCoach : c));
+    if (supabase) {
+      const { error } = await supabase
+        .from('coaches')
+        .update({
+          name: updatedCoach.name,
+          email: updatedCoach.email,
+          level: updatedCoach.level,
+          bio: updatedCoach.bio,
+          image_url: updatedCoach.imageUrl,
+          mobile_number: updatedCoach.mobileNumber,
+          bank_details: updatedCoach.bankDetails,
+          role: updatedCoach.role,
+          whatsapp_auto_reply_enabled: updatedCoach.whatsappAutoReplyEnabled ?? true,
+          whatsapp_auto_reply_message: updatedCoach.whatsappAutoReplyMessage || null,
+        })
+        .eq('id', updatedCoach.id);
+      if (error) {
+        console.error('Supabase: update coach failed', error.message);
+        throw error;
+      }
+    }
   };
 
   const addCoach = (newCoachData: Omit<Coach, 'id'>): Coach => {

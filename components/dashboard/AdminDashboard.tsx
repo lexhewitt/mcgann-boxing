@@ -4,6 +4,8 @@ import CoachManagement from './CoachManagement';
 import ClassManagement from './ClassManagement';
 import AdminOverview from './AdminOverview';
 import CalendarView from './CalendarView';
+import AdminCalendarView from './AdminCalendarView';
+import ReportsDashboard from './ReportsDashboard';
 import ActivityLog from './ActivityLog';
 import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
@@ -12,7 +14,7 @@ import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
-type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials';
+type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports';
 
 interface AdminDashboardProps {
   setViewAsCoach: (coach: Coach | null) => void;
@@ -53,7 +55,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
       case 'classes':
         return <ClassManagement />;
       case 'calendar':
-        return <CalendarView />;
+        return <AdminCalendarView />;
+      case 'reports':
+        return <ReportsDashboard />;
       case 'financials':
         return financialCoach ? (
           <CoachFinancialSummary
@@ -100,6 +104,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='classes' label="Manage Classes" />
             <TabButton tabName='calendar' label="Calendar" />
             <TabButton tabName='financials' label="Financials" />
+            <TabButton tabName='reports' label="Reports" />
             <TabButton tabName='notifications' label="Notifications" count={totalPendingNotifications} />
             <TabButton tabName='activity' label="Activity Log" />
         </div>

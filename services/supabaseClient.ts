@@ -39,7 +39,7 @@ export const getSupabase = (): SupabaseClient | null => {
   if (config.url !== buildConfig.url || config.key !== buildConfig.key) {
     console.log('Reinitializing Supabase client with runtime config');
     supabase = createClient(config.url, config.key, {
-      auth: { persistSession: false },
+        auth: { persistSession: false },
     });
   }
   

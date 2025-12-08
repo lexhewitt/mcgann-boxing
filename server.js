@@ -140,8 +140,23 @@ const bootstrapTables = async () => {
       createdAt: row.created_at,
     }));
 
+  const mapCoaches = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      email: row.email,
+      role: row.role,
+      level: row.level,
+      bio: row.bio,
+      imageUrl: row.image_url,
+      mobileNumber: row.mobile_number,
+      bankDetails: row.bank_details,
+      whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
+      whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
+    }));
+
   return {
-    coaches: ensureOk(coachesRes, 'coaches'),
+    coaches: mapCoaches(ensureOk(coachesRes, 'coaches')),
     members: ensureOk(membersRes, 'members'),
     familyMembers: ensureOk(familyRes, 'family members'),
     classes: ensureOk(classesRes, 'classes'),
@@ -559,6 +574,175 @@ apiRouter.post('/stripe-webhook', express.raw({ type: 'application/json' }), asy
   }
 
   res.json({ received: true });
+});
+
+// WhatsApp API endpoint for sending messages from frontend
+apiRouter.post('/send-whatsapp', express.json(), async (req, res) => {
+  const { to, message } = req.body;
+  
+  if (!to || !message) {
+    return res.status(400).json({ error: 'Missing "to" or "message" parameter' });
+  }
+
+  const { sendWhatsAppMessage } = require('./services/whatsappService');
+  const result = await sendWhatsAppMessage(to, message, { isWithin24HourWindow: true });
+  
+  if (result.success) {
+    return res.json({ success: true, messageId: result.messageId });
+  } else {
+    return res.status(500).json({ error: result.error });
+  }
+});
+
+// WhatsApp Webhook endpoint (Meta Cloud API)
+// GET request: Webhook verification
+apiRouter.get('/whatsapp-webhook', (req, res) => {
+  // Meta sends query params with 'hub.' prefix
+  const mode = req.query['hub.mode'] || req.query.mode;
+  const token = req.query['hub.verify_token'] || req.query.token;
+  const challenge = req.query['hub.challenge'] || req.query.challenge;
+  
+  const { handleWebhookVerification } = require('./services/whatsappService');
+  const result = handleWebhookVerification(mode, token, challenge);
+  
+  if (result.verified) {
+    return res.status(200).send(challenge);
+  }
+  
+  return res.status(403).send('Forbidden');
+});
+
+// POST request: Incoming messages
+// Use raw body parser to get unparsed body for signature verification
+apiRouter.post('/whatsapp-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  // Verify webhook signature (must use raw body)
+  const signature = req.headers['x-hub-signature-256'];
+  const rawBody = req.body; // Already a Buffer from express.raw()
+  
+  // Parse JSON after verification
+  let body;
+  try {
+    body = JSON.parse(rawBody.toString());
+  } catch (error) {
+    console.error('[WhatsApp] Failed to parse webhook body:', error);
+    return res.status(400).send('Invalid JSON');
+  }
+  
+  const { 
+    verifyWebhookSignature, 
+    extractMessageFromWebhook,
+    isAvailabilityQuestion, 
+    createAvailabilityAutoReply, 
+    generateScheduleLink, 
+    sendWhatsAppMessage,
+    normalizePhoneNumber 
+  } = require('./services/whatsappService');
+  
+  // Verify signature (skip in development if signature not provided)
+  if (signature && !verifyWebhookSignature(rawBody, signature)) {
+    console.error('[WhatsApp] Invalid webhook signature');
+    return res.status(403).send('Invalid signature');
+  }
+  
+  // Extract message from Meta webhook payload
+  const messageData = extractMessageFromWebhook(body);
+  
+  if (!messageData) {
+    // Not a text message or no message in payload (could be status update)
+    return res.status(200).send('OK');
+  }
+
+  const { from, text } = messageData;
+  
+  try {
+    const getSupabaseAdmin = () => {
+      if (supabaseAdmin) return supabaseAdmin;
+      const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!url || !serviceKey) {
+        console.warn('Supabase service role key or URL is not configured.');
+        return null;
+      }
+      supabaseAdmin = createClient(url, serviceKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      return supabaseAdmin;
+    };
+    
+    // Find coach by phone number
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      console.error('[WhatsApp] Supabase not configured');
+      return res.status(500).send('Service not configured');
+    }
+
+    // Query coaches table to find matching phone number
+    const { data: coaches, error } = await supabase
+      .from('coaches')
+      .select('id, name, mobile_number, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message')
+      .not('mobile_number', 'is', null);
+
+    if (error) {
+      console.error('[WhatsApp] Error fetching coaches:', error);
+      return res.status(500).send('Database error');
+    }
+
+    // Normalize phone numbers for matching
+    const normalizePhone = (phone) => {
+      const normalized = normalizePhoneNumber(phone);
+      return normalized || phone.replace(/[^\d+]/g, '').replace(/^0/, '+44');
+    };
+    
+    const normalizedFrom = normalizePhone(from);
+    
+    const coach = coaches?.find(c => {
+      if (!c.mobile_number) return false;
+      const normalizedCoachPhone = normalizePhone(c.mobile_number);
+      return normalizedCoachPhone === normalizedFrom || 
+             normalizedCoachPhone.endsWith(normalizedFrom.slice(-10)) ||
+             normalizedFrom.endsWith(normalizedCoachPhone.slice(-10));
+    });
+
+    // Check if message is about availability
+    if (!isAvailabilityQuestion(text)) {
+      return res.status(200).send('OK'); // Not an availability question, no action
+    }
+
+    const baseUrl = process.env.FRONTEND_URL || req.protocol + '://' + req.get('host');
+    
+    if (!coach) {
+      // Not a coach, but customer asking about general availability
+      const scheduleLink = generateScheduleLink(undefined, baseUrl);
+      const reply = createAvailabilityAutoReply('our coaches', scheduleLink);
+      
+      // Send message (within 24-hour window, so use free-form text)
+      await sendWhatsAppMessage(from, reply, { isWithin24HourWindow: true });
+      console.log(`[WhatsApp] Auto-replied to ${from} about general availability`);
+      return res.status(200).send('OK');
+    }
+
+    // Check if auto-reply is enabled for this coach (default to true if not set)
+    const autoReplyEnabled = coach.whatsapp_auto_reply_enabled !== false;
+    
+    if (!autoReplyEnabled) {
+      console.log(`[WhatsApp] Auto-reply disabled for coach ${coach.name}, skipping auto-reply to ${from}`);
+      return res.status(200).send('OK'); // Coach has disabled auto-replies
+    }
+
+    // This is a message TO a coach (someone asking about their availability)
+    const scheduleLink = generateScheduleLink(coach.id, baseUrl);
+    const customMessage = coach.whatsapp_auto_reply_message || null;
+    const reply = createAvailabilityAutoReply(coach.name, scheduleLink, customMessage);
+    
+    // Send message (within 24-hour window, so use free-form text)
+    await sendWhatsAppMessage(from, reply, { isWithin24HourWindow: true });
+    console.log(`[WhatsApp] Auto-replied to ${from} about ${coach.name}'s availability${customMessage ? ' (custom message)' : ''}`);
+    
+    res.status(200).send('OK');
+  } catch (error) {
+    console.error('[WhatsApp] Webhook error:', error);
+    res.status(500).send('Internal server error');
+  }
 });
 
 // --- Middleware & Route Registration ---

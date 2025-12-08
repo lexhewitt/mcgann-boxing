@@ -135,6 +135,103 @@ This creates all necessary tables and seed data.
 
 ---
 
+## WhatsApp Business Cloud API Configuration (Meta)
+
+### Overview
+
+The application includes WhatsApp auto-reply functionality using Meta's WhatsApp Cloud API that:
+- Automatically responds to availability questions sent to coaches
+- Sends personalized booking links with monthly schedule calendar
+- Allows customers to book as guests or become members
+- Direct integration with Meta (no BSP required)
+
+### Quick Setup
+
+For detailed setup instructions, see **[WHATSAPP_INTEGRATION_META.md](WHATSAPP_INTEGRATION_META.md)**
+
+### Prerequisites
+
+1. **Meta Business Account** - [business.facebook.com](https://business.facebook.com)
+2. **Meta Developer Account** - [developers.facebook.com](https://developers.facebook.com)
+3. **WhatsApp Business API Access** - Apply through Meta
+
+### Get Your Credentials
+
+1. **Create Meta App** with WhatsApp product
+2. **Get App ID and App Secret** from Settings → Basic
+3. **Get Access Token** from WhatsApp → API Setup (use System User token for production)
+4. **Get Phone Number ID** from WhatsApp → API Setup (not the phone number itself!)
+5. **Generate Webhook Verify Token** (secure random string)
+
+### Environment Variables
+
+Add to `.env.local`:
+
+```env
+# Meta WhatsApp Cloud API Configuration
+META_APP_ID=your_app_id
+META_APP_SECRET=your_app_secret
+META_ACCESS_TOKEN=your_access_token
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+META_WEBHOOK_VERIFY_TOKEN=your_secure_random_token
+META_API_VERSION=v21.0
+FRONTEND_URL=https://your-domain.com
+```
+
+### Configure Webhook
+
+1. In Meta App Dashboard → WhatsApp → Configuration → Webhook
+2. Set Callback URL: `https://your-domain.com/server-api/whatsapp-webhook`
+3. Set Verify Token: Your generated token
+4. Subscribe to: `messages` field
+
+### Message Templates
+
+For messages outside 24-hour window, create approved templates:
+- Go to WhatsApp → Message Templates
+- Create template with variables for coach name and booking link
+- Submit for approval (24-48 hours)
+
+### How It Works
+
+1. **Customer sends WhatsApp message** to a coach asking about availability
+2. **Meta sends webhook** to `/server-api/whatsapp-webhook` (with signature verification)
+3. **System detects availability question** using keyword matching
+4. **Auto-reply sent** with personalized booking link (free-form text, within 24-hour window):
+   - Link includes coach ID: `/book?coach=coach-id&view=calendar`
+   - Shows monthly schedule calendar view
+   - Options to book as guest or become a member
+
+### 24-Hour Window Rule
+
+- **Within 24 hours**: Can send free-form text messages (auto-replies use this)
+- **Outside 24 hours**: Must use approved message templates
+
+### Testing
+
+1. Send WhatsApp message to your business number: "When are you available?"
+2. Check server logs for webhook receipt
+3. Verify auto-reply is sent with booking link
+
+### Production Deployment
+
+```bash
+gcloud run services update mcgann-boxing \
+  --set-env-vars="META_APP_ID=your_app_id,META_ACCESS_TOKEN=your_token,WHATSAPP_PHONE_NUMBER_ID=your_phone_id,META_WEBHOOK_VERIFY_TOKEN=your_token,META_API_VERSION=v21.0,FRONTEND_URL=https://your-domain.com" \
+  --set-secrets="META_APP_SECRET=meta-app-secret:latest" \
+  --region=europe-west2
+```
+
+**Important**: Store `META_APP_SECRET` as a secret, not an environment variable!
+
+### Cost
+
+- **User-initiated conversations**: FREE (customer messages first)
+- **Business-initiated conversations**: Paid per conversation
+- Auto-replies are user-initiated, so they're **FREE**!
+
+---
+
 ## Stripe Configuration
 
 ### 1. Get Your Stripe Keys

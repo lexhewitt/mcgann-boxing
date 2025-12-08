@@ -5,6 +5,7 @@ import { AvailabilitySlot, UserRole, GymClass, Coach } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { timeToMinutes, parseClassTime } from '../../utils/time';
+import AvailabilityWizard from './AvailabilityWizard';
 
 interface CoachAvailabilityManagerProps {
     coach: Coach;
@@ -12,12 +13,7 @@ interface CoachAvailabilityManagerProps {
 
 const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coach }) => {
     const { classes, coachAvailability, addAvailabilitySlot, deleteAvailabilitySlot, unavailableSlots, addUnavailableSlot, deleteUnavailableSlot } = useData();
-    
-    // State for recurring availability
-    const [day, setDay] = useState<'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday'>('Monday');
-    const [recurringStartTime, setRecurringStartTime] = useState('09:00');
-    const [recurringEndTime, setRecurringEndTime] = useState('17:00');
-    const [recurringError, setRecurringError] = useState('');
+    const [showWizard, setShowWizard] = useState(false);
     
     // State for one-off unavailability
     const [unavailableDate, setUnavailableDate] = useState(new Date().toISOString().split('T')[0]);
@@ -28,21 +24,6 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
     
     const myAvailability = coachAvailability.filter(slot => slot.coachId === coach.id);
     const myUnavailableSlots = unavailableSlots.filter(slot => slot.coachId === coach.id);
-
-    const handleRecurringSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setRecurringError('');
-        if (recurringStartTime >= recurringEndTime) {
-            setRecurringError('End time must be after start time.');
-            return;
-        }
-        addAvailabilitySlot({
-            coachId: coach.id,
-            day,
-            startTime: recurringStartTime,
-            endTime: recurringEndTime
-        });
-    };
     
     const handleUnavailableSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -71,21 +52,14 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
         <div className="bg-brand-gray p-6 rounded-lg mt-8 space-y-12">
             {/* Recurring Availability Section */}
             <div>
-                <h2 className="text-2xl font-semibold text-white mb-2">Manage Recurring Availability</h2>
-                <p className="text-sm text-gray-400 mb-6">Set your general weekly schedule. Classes can only be assigned to you during these times.</p>
-                
-                <form onSubmit={handleRecurringSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-brand-dark p-4 rounded-lg mb-6">
+                <div className="flex justify-between items-center mb-6">
                     <div>
-                        <label htmlFor="day-select" className="block text-sm font-medium text-gray-300 mb-1">Day</label>
-                        <select id="day-select" value={day} onChange={e => setDay(e.target.value as AvailabilitySlot['day'])} className="w-full bg-brand-gray border border-gray-600 rounded-md px-3 py-2 text-white">
-                            {daysOfWeek.map(d => <option key={d} value={d}>{d}</option>)}
-                        </select>
+                        <h2 className="text-2xl font-semibold text-white mb-2">Manage Recurring Availability</h2>
+                        <p className="text-sm text-gray-400">Set your general weekly schedule. Classes can only be assigned to you during these times.</p>
                     </div>
-                    <Input label="Start Time" id="start-time" type="time" value={recurringStartTime} onChange={e => setRecurringStartTime(e.target.value)} />
-                    <Input label="End Time" id="end-time" type="time" value={recurringEndTime} onChange={e => setRecurringEndTime(e.target.value)} />
-                    <Button type="submit">Add Slot</Button>
-                    {recurringError && <p className="text-red-500 text-sm col-span-4 mt-2">{recurringError}</p>}
-                </form>
+                    <Button onClick={() => setShowWizard(true)}>Create Availability (Wizard)</Button>
+                </div>
+                
 
                 <div>
                     <h3 className="text-lg font-semibold text-white mb-2">Current Recurring Slots</h3>
@@ -107,8 +81,33 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
                                 
                                 return (
                                     <div key={slot.id} className="flex justify-between items-start bg-brand-dark p-3 rounded">
-                                        <div>
-                                            <p className="font-semibold">{slot.day}: {slot.startTime} – {slot.endTime}</p>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <p className="font-semibold text-white">{slot.day}: {slot.startTime} – {slot.endTime}</p>
+                                                <button
+                                                    onClick={() => {
+                                                        const newStart = prompt('Enter new start time (HH:MM):', slot.startTime);
+                                                        const newEnd = prompt('Enter new end time (HH:MM):', slot.endTime);
+                                                        if (newStart && newEnd && newStart < newEnd) {
+                                                            // Update the slot - we'll need to delete and recreate
+                                                            deleteAvailabilitySlot(slot.id);
+                                                            setTimeout(() => {
+                                                                addAvailabilitySlot({
+                                                                    coachId: coach.id,
+                                                                    day: slot.day,
+                                                                    startTime: newStart,
+                                                                    endTime: newEnd,
+                                                                });
+                                                            }, 100);
+                                                        } else if (newStart && newEnd) {
+                                                            alert('End time must be after start time');
+                                                        }
+                                                    }}
+                                                    className="text-xs text-blue-400 hover:text-blue-300 underline"
+                                                >
+                                                    Edit Times
+                                                </button>
+                                            </div>
                                              {classesInSlot.length > 0 ? (
                                                 <ul className="mt-2 pl-4 list-disc list-inside space-y-1">
                                                     {classesInSlot.map(cls => (
@@ -127,7 +126,7 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
                             })}
                         </div>
                     ) : (
-                        <p className="text-gray-400">You have no recurring availability slots set.</p>
+                        <p className="text-gray-400">You have no recurring availability slots set. Use the wizard above to create availability.</p>
                     )}
                 </div>
             </div>
@@ -172,6 +171,12 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
                     )}
                 </div>
             </div>
+
+            <AvailabilityWizard
+                isOpen={showWizard}
+                onClose={() => setShowWizard(false)}
+                coach={coach}
+            />
         </div>
     );
 }

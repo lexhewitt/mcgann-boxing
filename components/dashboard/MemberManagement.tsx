@@ -53,13 +53,13 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
 
     try {
       await addMember({
-        ...formData,
-        role: UserRole.MEMBER,
-        coachId: formData.coachId || null,
-      });
-      
-      setFormData(initialFormData); // Reset form
-      onClose();
+      ...formData,
+      role: UserRole.MEMBER,
+      coachId: formData.coachId || null,
+    });
+    
+    setFormData(initialFormData); // Reset form
+    onClose();
     } catch (error) {
       console.error('Error adding member:', error);
       setError('Failed to add member. Please try again.');
@@ -389,13 +389,18 @@ const MemberManagement: React.FC = () => {
       <AddMemberModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
       <EditMemberModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} member={memberToEdit} />
       {memberToViewFinancials && (
-        <div className="mt-8">
-            <MemberFinancialSummary
-                member={memberToViewFinancials}
-                transactions={transactions}
-                onClose={() => setMemberToViewFinancials(null)}
-            />
-        </div>
+        <Modal
+          isOpen={!!memberToViewFinancials}
+          onClose={() => setMemberToViewFinancials(null)}
+          title={`Financial Statement - ${memberToViewFinancials.name}`}
+        >
+          <MemberFinancialSummary
+            member={memberToViewFinancials}
+            transactions={transactions}
+            onClose={() => setMemberToViewFinancials(null)}
+            embedded={true}
+          />
+        </Modal>
       )}
     </>
   );

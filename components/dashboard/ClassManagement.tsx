@@ -3,11 +3,13 @@ import { useData } from '../../context/DataContext';
 import Button from '../ui/Button';
 import { GymClass } from '../../types';
 import AddClassModal from './AddClassModal';
+import ClassCreationWizard from './ClassCreationWizard';
 import EditClassModal from './EditClassModal';
 
 const ClassManagement: React.FC = () => {
   const { classes, coaches, deleteClass } = useData();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [classToEdit, setClassToEdit] = useState<GymClass | null>(null);
 
@@ -26,7 +28,10 @@ const ClassManagement: React.FC = () => {
       <div className="overflow-x-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-white">Classes ({classes.length})</h3>
-          <Button onClick={() => setIsAddModalOpen(true)}>Add New Class</Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setIsAddModalOpen(true)}>Add Class (Quick)</Button>
+            <Button onClick={() => setIsWizardOpen(true)}>Create Class (Wizard)</Button>
+          </div>
         </div>
         <table className="min-w-full bg-brand-dark text-sm">
           <thead className="bg-black">
@@ -59,6 +64,7 @@ const ClassManagement: React.FC = () => {
         </table>
       </div>
       <AddClassModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
+      <ClassCreationWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
       <EditClassModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} gymClass={classToEdit} />
     </>
   );

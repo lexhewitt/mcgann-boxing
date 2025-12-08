@@ -40,6 +40,7 @@ const BookingWizard: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [serviceFilter, setServiceFilter] = useState<'ALL' | 'CLASS' | 'PRIVATE'>('ALL');
   const [coachFilter, setCoachFilter] = useState<string>('ALL');
+  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [step, setStep] = useState(1);
   const [participantName, setParticipantName] = useState('');
   const [participantDob, setParticipantDob] = useState('');
@@ -136,6 +137,24 @@ const BookingWizard: React.FC = () => {
     });
     return map;
   }, [filteredItems]);
+
+  // Initialize from URL parameters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const coachParam = params.get('coach');
+    const viewParam = params.get('view');
+    
+    if (coachParam) {
+      const coach = coaches.find(c => c.id === coachParam);
+      if (coach) {
+        setCoachFilter(coach.name);
+      }
+    }
+    
+    if (viewParam === 'calendar') {
+      setViewMode('calendar');
+    }
+  }, [coaches]);
 
   useEffect(() => {
     setSelectedDate(null);
@@ -326,6 +345,15 @@ const BookingWizard: React.FC = () => {
               ))}
             </div>
             <div className="md:ml-auto flex items-center gap-2">
+              <button
+                onClick={() => setViewMode(viewMode === 'calendar' ? 'list' : 'calendar')}
+                className={`px-4 py-2 rounded-full border text-sm font-semibold ${
+                  viewMode === 'calendar' ? 'bg-brand-red text-white border-brand-red' : 'bg-black/30 border-gray-600 text-gray-300'
+                }`}
+                title="Toggle calendar view"
+              >
+                {viewMode === 'calendar' ? '📅 Calendar' : '📋 List'}
+              </button>
               <label htmlFor="coach-filter" className="text-sm text-gray-400">Coach</label>
               <select
                 id="coach-filter"
