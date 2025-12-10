@@ -158,7 +158,12 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
                       className="text-xs py-1 px-2" 
                       onClick={(e) => {
                         e.stopPropagation();
-                        onViewCoachDashboard(coach);
+                        e.preventDefault();
+                        if (onViewCoachDashboard) {
+                          onViewCoachDashboard(coach);
+                        } else {
+                          console.error('onViewCoachDashboard is not defined');
+                        }
                       }}
                       title={`View ${coach.name}'s dashboard`}
                     >

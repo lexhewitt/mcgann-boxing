@@ -277,10 +277,15 @@ const extractMessageFromWebhook = (payload) => {
     return null;
   }
 
+  // The display_phone_number is the number that received the message (coach's number)
+  const displayPhoneNumber = value.metadata?.display_phone_number;
+
   return {
-    from: message.from,
+    from: message.from, // Sender's number (customer)
     text: message.text.body,
     messageId: message.id,
+    to: displayPhoneNumber, // Recipient's number (coach's number)
+    displayPhoneNumber: displayPhoneNumber,
   };
 };
 

@@ -61,6 +61,10 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here
 STRIPE_PUBLISHABLE_KEY=pk_test_...
 STRIPE_SECRET_KEY=sk_test_...
 
+# Gmail SMTP Configuration (for monthly statements)
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-16-character-app-password
+
 # Optional: For local server
 PORT=3000
 ```

@@ -73,6 +73,11 @@ export interface Booking {
   paid: boolean;
   attended?: boolean;
   confirmationStatus?: ConfirmationStatus;
+  paymentMethod?: 'ONE_OFF' | 'PER_SESSION' | 'WEEKLY' | 'MONTHLY';
+  billingFrequency?: 'WEEKLY' | 'MONTHLY';
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  nextBillingDate?: string;
 }
 
 export enum NotificationStatus {
@@ -179,6 +184,11 @@ export interface GuestBooking {
   contactPhone: string;
   status: ConfirmationStatus;
   createdAt: string;
+  paymentMethod?: 'ONE_OFF' | 'PER_SESSION' | 'WEEKLY' | 'MONTHLY';
+  billingFrequency?: 'WEEKLY' | 'MONTHLY';
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  nextBillingDate?: string;
 }
 
 export enum TransactionStatus {
@@ -210,6 +220,12 @@ export interface Transaction {
   createdAt: string;
   settledAt?: string;
   confirmationStatus?: ConfirmationStatus;
+  paymentMethod?: 'ONE_OFF' | 'PER_SESSION' | 'WEEKLY' | 'MONTHLY';
+  billingFrequency?: 'WEEKLY' | 'MONTHLY';
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  invoiceSentAt?: string;
+  reminderSentAt?: string;
 }
 
 export type BookingAlertStatus = 'PENDING' | 'ACKNOWLEDGED';
@@ -228,4 +244,32 @@ export interface BookingAlert {
   status: BookingAlertStatus;
   confirmedBy?: string;
   confirmedAt?: string;
+}
+
+export interface MonthlyStatement {
+  id: string;
+  memberId?: string;
+  contactEmail: string;
+  contactName?: string;
+  statementPeriodStart: string; // ISO date
+  statementPeriodEnd: string; // ISO date
+  totalAmount: number;
+  currency: 'GBP';
+  status: 'PENDING' | 'SENT' | 'PAID';
+  stripeInvoiceId?: string;
+  sentAt?: string;
+  paidAt?: string;
+  createdAt: string;
+}
+
+export interface StatementLineItem {
+  id: string;
+  statementId: string;
+  transactionId?: string;
+  bookingId?: string;
+  description: string;
+  amount: number;
+  serviceType?: 'CLASS' | 'PRIVATE' | 'GROUP_SESSION';
+  serviceDate?: string; // ISO date
+  createdAt: string;
 }

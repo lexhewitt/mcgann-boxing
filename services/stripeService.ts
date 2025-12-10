@@ -12,34 +12,60 @@ interface StripeJS {
 let stripePromise: Promise<StripeJS | null>;
 
 /**
+ * Waits for Stripe.js to load from the CDN script
+ */
+const waitForStripeJS = (maxWait = 5000): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    if ((window as any).Stripe) {
+      resolve();
+      return;
+    }
+
+    const startTime = Date.now();
+    const checkInterval = setInterval(() => {
+      if ((window as any).Stripe) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > maxWait) {
+        clearInterval(checkInterval);
+        reject(new Error('Stripe.js script failed to load within timeout period.'));
+      }
+    }, 100);
+  });
+};
+
+/**
  * Fetches the Stripe publishable key from our backend, then initializes and returns a Stripe object.
  */
 const getStripe = (): Promise<StripeJS | null> => {
   if (!stripePromise) {
-    stripePromise = fetch('/server-api/stripe-config')
+    stripePromise = Promise.resolve()
+      .then(() => waitForStripeJS())
+      .then(() => fetch('/server-api/stripe-config'))
       .then(res => {
         if (!res.ok) {
-            throw new Error(`Failed to fetch Stripe config: ${res.status}`);
+          if (res.status === 500) {
+            throw new Error('Stripe is not configured on the server. Please contact support.');
+          }
+          throw new Error(`Failed to fetch Stripe config: ${res.status}`);
         }
         return res.json();
       })
       .then(data => {
         if (!data.publishableKey) {
-          throw new Error('Stripe publishable key not found in server config.');
+          throw new Error('Stripe publishable key not found in server config. Please contact support.');
         }
         // Use the global Stripe object from the script tag in index.html
         // The script at https://js.stripe.com/v3/ creates window.Stripe
         if ((window as any).Stripe) {
           return (window as any).Stripe(data.publishableKey) as StripeJS;
         } else {
-          // This case might happen if the script hasn't loaded yet.
-          // In a real-world app, you might want a more robust way to wait for the script.
-          throw new Error("Stripe.js has not loaded.");
+          throw new Error("Stripe.js library is not available.");
         }
       })
       .catch(error => {
-          console.error("Error initializing Stripe:", error.message);
-          return null; // Return null if initialization fails
+        console.error("Error initializing Stripe:", error.message);
+        return null; // Return null if initialization fails
       });
   }
   return stripePromise;
@@ -63,10 +89,29 @@ export const handleStripeCheckout = async (
   memberId: string,
   options?: { onSessionCreated?: (sessionId: string) => void; sessionStart?: string }
 ): Promise<{ success: boolean; error?: string }> => {
-  const stripe = await getStripe();
+  let stripe: StripeJS | null;
+  try {
+    stripe = await getStripe();
+  } catch (error) {
+    console.error('Stripe initialization error:', error);
+    return { success: false, error: 'Failed to initialize payment system. Please refresh the page and try again.' };
+  }
 
   if (!stripe) {
-    return { success: false, error: 'Stripe could not be initialized. Please check the server configuration and network connection.' };
+    // Try to get more specific error info
+    try {
+      const configRes = await fetch('/server-api/stripe-config');
+      if (!configRes.ok) {
+        return { success: false, error: 'Payment system is not configured on the server. Please contact support.' };
+      }
+      const config = await configRes.json();
+      if (!config.publishableKey) {
+        return { success: false, error: 'Payment system is not configured. Please contact support.' };
+      }
+    } catch (e) {
+      // Ignore
+    }
+    return { success: false, error: 'Payment system could not be initialized. Please refresh the page and try again.' };
   }
 
   try {
@@ -130,6 +175,8 @@ interface GuestCheckoutPayload {
     contactEmail: string;
     contactPhone: string;
   };
+  paymentMethod?: 'ONE_OFF' | 'PER_SESSION' | 'WEEKLY' | 'MONTHLY';
+  billingFrequency?: 'WEEKLY' | 'MONTHLY';
   successPath?: string;
 }
 
@@ -152,6 +199,8 @@ export const handleGuestCheckout = async (payload: GuestCheckoutPayload) => {
         coachId: payload.coachId,
         sessionStart: payload.sessionStart,
         guestBooking: payload.guestBooking,
+        paymentMethod: payload.paymentMethod,
+        billingFrequency: payload.billingFrequency,
         successPath: payload.successPath || '/book',
       }),
     });

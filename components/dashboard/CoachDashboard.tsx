@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { GymClass, UserRole, NotificationStatus, Coach } from '../../types';
 import CoachCard from '../ui/CoachCard';
+import Button from '../ui/Button';
 import CoachAvailabilityManager from './CoachAvailabilityManager';
 import ClassDetailsModal from './ClassDetailsModal';
 import CalendarView from './CalendarView';
@@ -12,6 +13,7 @@ import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
 import WhatsAppControlPanel from './WhatsAppControlPanel';
 import AvatarUpload from './AvatarUpload';
+import CoachProfileEditor from './CoachProfileEditor';
 
 type CoachTab = 'classes' | 'calendar' | 'availability' | 'notifications' | 'financials' | 'whatsapp';
 
@@ -25,16 +27,39 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     const { classes, bookings, notifications, bookingAlerts, updateCoach, coaches } = useData();
     const [selectedClass, setSelectedClass] = useState<GymClass | null>(null);
     const [activeTab, setActiveTab] = useState<CoachTab>('classes');
+    const [isEditingProfile, setIsEditingProfile] = useState(false);
 
     // Get the coach from the coaches array to ensure we have the latest data
     const coachForDashboard = useMemo(() => {
         const targetCoach = coachToView || (currentUser?.role !== UserRole.MEMBER ? currentUser : null);
-        if (!targetCoach) return null;
-        // Find the latest version from the coaches array
-        return coaches.find(c => c.id === targetCoach.id) || targetCoach;
+        if (!targetCoach) {
+            console.warn('[CoachDashboard] No target coach found', { coachToView, currentUser });
+            return null;
+        }
+        // Find the latest version from the coaches array, or fall back to the passed coach
+        const foundCoach = coaches.find(c => c.id === targetCoach.id);
+        if (!foundCoach && coaches.length > 0) {
+            console.warn('[CoachDashboard] Coach not found in coaches array, using passed coach', { 
+                coachId: targetCoach.id, 
+                coachName: targetCoach.name,
+                coachesCount: coaches.length 
+            });
+        }
+        return foundCoach || targetCoach;
     }, [coachToView, currentUser, coaches]);
 
-    if (!coachForDashboard) return null;
+    if (!coachForDashboard) {
+        return (
+            <div className="p-8 text-center">
+                <p className="text-gray-400">Loading coach dashboard...</p>
+                {coachToView && (
+                    <p className="text-sm text-gray-500 mt-2">
+                        Coach: {coachToView.name} (ID: {coachToView.id})
+                    </p>
+                )}
+            </div>
+        );
+    }
 
     const coachClasses = classes.filter(c => c.coachId === coachForDashboard.id);
     const pendingTransferCount = notifications.filter(
@@ -148,13 +173,27 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                     </div>
                 </div>
                 <div className="bg-brand-dark p-4 rounded-lg mt-4 text-sm">
-                    <h3 className="font-semibold text-gray-300 mb-2 border-b border-gray-700 pb-1">Private Details</h3>
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="font-semibold text-gray-300 border-b border-gray-700 pb-1">Private Details</h3>
+                        <Button variant="secondary" onClick={() => setIsEditingProfile(true)}>
+                            Edit Profile
+                        </Button>
+                    </div>
                     <div className="text-gray-400 space-y-1">
                         <p><strong>Mobile:</strong> {(coachForDashboard as Coach).mobileNumber || 'Not set'}</p>
                         <p><strong>Bank Details:</strong> {(coachForDashboard as Coach).bankDetails || 'Not set'}</p>
                     </div>
                 </div>
             </div>
+            
+            {isEditingProfile && (
+                <div className="mt-6">
+                    <CoachProfileEditor
+                        coach={coachForDashboard as Coach}
+                        onClose={() => setIsEditingProfile(false)}
+                    />
+                </div>
+            )}
 
             <div className="border-b border-gray-700 flex flex-wrap mt-8">
                 <TabButton tabName="classes" label="My Classes" />

@@ -325,7 +325,7 @@ export interface MetaWebhookPayload {
  */
 export const extractMessageFromWebhook = (
   payload: MetaWebhookPayload
-): { from: string; text: string; messageId: string } | null => {
+): { from: string; text: string; messageId: string; to?: string; displayPhoneNumber?: string } | null => {
   if (!payload.entry || payload.entry.length === 0) {
     return null;
   }
@@ -345,10 +345,15 @@ export const extractMessageFromWebhook = (
     return null;
   }
 
+  // The display_phone_number is the number that received the message (coach's number)
+  const displayPhoneNumber = value.metadata?.display_phone_number;
+
   return {
-    from: message.from,
+    from: message.from, // Sender's number (customer)
     text: message.text.body,
     messageId: message.id,
+    to: displayPhoneNumber, // Recipient's number (coach's number)
+    displayPhoneNumber: displayPhoneNumber,
   };
 };
 

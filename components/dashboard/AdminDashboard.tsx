@@ -6,15 +6,17 @@ import AdminOverview from './AdminOverview';
 import CalendarView from './CalendarView';
 import AdminCalendarView from './AdminCalendarView';
 import ReportsDashboard from './ReportsDashboard';
+import SystemCheckPanel from './SystemCheckPanel';
 import ActivityLog from './ActivityLog';
 import NotificationsPanel from './NotificationsPanel';
 import FinancialsDashboard from './FinancialsDashboard';
 import CoachFinancialSummary from './CoachFinancialSummary';
+import AdminWhatsAppPanel from './AdminWhatsAppPanel';
 import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
-type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports';
+type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp';
 
 interface AdminDashboardProps {
   setViewAsCoach: (coach: Coach | null) => void;
@@ -58,6 +60,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
         return <AdminCalendarView />;
       case 'reports':
         return <ReportsDashboard />;
+      case 'system':
+        return <SystemCheckPanel />;
+      case 'whatsapp':
+        return <AdminWhatsAppPanel />;
       case 'financials':
         return financialCoach ? (
           <CoachFinancialSummary
@@ -105,6 +111,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='calendar' label="Calendar" />
             <TabButton tabName='financials' label="Financials" />
             <TabButton tabName='reports' label="Reports" />
+            <TabButton tabName='whatsapp' label="WhatsApp" />
+            <TabButton tabName='system' label="System Status" />
             <TabButton tabName='notifications' label="Notifications" count={totalPendingNotifications} />
             <TabButton tabName='activity' label="Activity Log" />
         </div>

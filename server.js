@@ -206,6 +206,10 @@ const upsertTransaction = async ({
   source,
   description,
   confirmationStatus = 'PENDING',
+  paymentMethod,
+  billingFrequency,
+  stripeCustomerId,
+  stripeSubscriptionId,
 }) => {
   const supabase = getSupabaseAdmin();
   if (!supabase) return null;
@@ -234,6 +238,10 @@ const upsertTransaction = async ({
     stripe_session_id: stripeSessionId,
     confirmation_status: confirmationStatus,
     settled_at: nowIso(),
+    payment_method: paymentMethod || 'ONE_OFF',
+    billing_frequency: billingFrequency || null,
+    stripe_customer_id: stripeCustomerId || null,
+    stripe_subscription_id: stripeSubscriptionId || null,
   };
 
   if (existing?.id) {
@@ -309,7 +317,7 @@ const ensureAppointment = async ({ slotId, memberId, participantName }) => {
   return id;
 };
 
-const ensureGuestBooking = async ({ serviceType, referenceId, title, date, participantName, contactName, contactEmail, contactPhone }) => {
+const ensureGuestBooking = async ({ serviceType, referenceId, title, date, participantName, contactName, contactEmail, contactPhone, paymentMethod, billingFrequency, stripeCustomerId, stripeSubscriptionId, nextBillingDate }) => {
   const supabase = getSupabaseAdmin();
   if (!supabase) return null;
   const id = `guest-${Date.now()}`;
@@ -323,6 +331,11 @@ const ensureGuestBooking = async ({ serviceType, referenceId, title, date, parti
     contact_name: contactName || null,
     contact_email: contactEmail || null,
     contact_phone: contactPhone || null,
+    payment_method: paymentMethod || 'ONE_OFF',
+    billing_frequency: billingFrequency || null,
+    stripe_customer_id: stripeCustomerId || null,
+    stripe_subscription_id: stripeSubscriptionId || null,
+    next_billing_date: nextBillingDate || null,
     status: 'PENDING',
     created_at: nowIso(),
   });
@@ -337,6 +350,28 @@ const handleCheckoutSessionCompleted = async (session) => {
   const amount = session.amount_total ? session.amount_total / 100 : undefined;
   const currency = session.currency || 'GBP';
   const flowType = metadata.flowType || (metadata.slotId ? 'COACH_SLOT' : metadata.guestBooking ? 'GUEST' : 'CLASS');
+  
+  // Extract payment method and billing info
+  const paymentMethod = metadata.paymentMethod || 'ONE_OFF';
+  const billingFrequency = metadata.billingFrequency || null;
+  
+  // Extract subscription info if this is a subscription
+  let stripeCustomerId = null;
+  let stripeSubscriptionId = null;
+  let nextBillingDate = null;
+  
+  if (session.mode === 'subscription' && session.subscription) {
+    try {
+      const subscription = await stripe.subscriptions.retrieve(session.subscription);
+      stripeCustomerId = subscription.customer;
+      stripeSubscriptionId = subscription.id;
+      nextBillingDate = subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString().split('T')[0] : null;
+    } catch (err) {
+      console.error('Error retrieving subscription:', err.message);
+    }
+  } else if (session.customer) {
+    stripeCustomerId = session.customer;
+  }
 
   const basePayload = {
     stripeSessionId: session.id,
@@ -345,6 +380,10 @@ const handleCheckoutSessionCompleted = async (session) => {
     amount,
     currency,
     description: metadata.slotTitle || metadata.className || metadata.slotId || metadata.classId,
+    paymentMethod,
+    billingFrequency,
+    stripeCustomerId,
+    stripeSubscriptionId,
   };
 
   if (flowType === 'CLASS') {
@@ -361,7 +400,7 @@ const handleCheckoutSessionCompleted = async (session) => {
       source: 'CLASS',
       confirmationStatus: 'PENDING',
     });
-    console.log(`[Stripe] Class booking recorded for class ${metadata.classId}, member ${metadata.memberId}`);
+    console.log(`[Stripe] Class booking recorded for class ${metadata.classId}, member ${metadata.memberId}, payment: ${paymentMethod}`);
     return;
   }
 
@@ -377,27 +416,33 @@ const handleCheckoutSessionCompleted = async (session) => {
       source: metadata.slotType === 'GROUP' ? 'GROUP_SESSION' : 'PRIVATE_SESSION',
       confirmationStatus: 'PENDING',
     });
-    console.log(`[Stripe] Coach slot booked for slot ${metadata.slotId}, appointment ${appointmentId || 'n/a'}`);
+    console.log(`[Stripe] Coach slot booked for slot ${metadata.slotId}, appointment ${appointmentId || 'n/a'}, payment: ${paymentMethod}`);
     return;
   }
 
   // Treat everything else as a guest purchase
+  const guestBookingData = metadata.guestBooking ? JSON.parse(metadata.guestBooking) : {};
   await ensureGuestBooking({
     serviceType: metadata.classId ? 'CLASS' : 'PRIVATE',
     referenceId: metadata.classId || metadata.slotId,
     title: metadata.className || metadata.slotTitle || 'Guest Booking',
     date: metadata.sessionStart,
-    participantName: metadata.participantName || metadata.guestName,
-    contactName: metadata.guestContactName,
-    contactEmail: metadata.guestContactEmail,
-    contactPhone: metadata.guestContactPhone,
+    participantName: metadata.participantName || guestBookingData.participantName,
+    contactName: metadata.guestContactName || guestBookingData.contactName,
+    contactEmail: metadata.guestContactEmail || guestBookingData.contactEmail,
+    contactPhone: metadata.guestContactPhone || guestBookingData.contactPhone,
+    paymentMethod,
+    billingFrequency,
+    stripeCustomerId,
+    stripeSubscriptionId,
+    nextBillingDate,
   });
   await upsertTransaction({
     ...basePayload,
     source: metadata.classId ? 'CLASS' : 'PRIVATE_SESSION',
     confirmationStatus: 'PENDING',
   });
-  console.log(`[Stripe] Guest booking recorded for reference ${metadata.classId || metadata.slotId}`);
+  console.log(`[Stripe] Guest booking recorded for reference ${metadata.classId || metadata.slotId}, payment: ${paymentMethod}`);
 };
 
 
@@ -422,7 +467,7 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
   }
   
   try {
-    const { className, classId, price, participantId, memberId, slotId, slotTitle, participantName, guestBooking, successPath, coachId, sessionStart, slotType } = req.body;
+    const { className, classId, price, participantId, memberId, slotId, slotTitle, participantName, guestBooking, successPath, coachId, sessionStart, slotType, paymentMethod, billingFrequency } = req.body;
 
     if (price === undefined || (!memberId && !guestBooking)) {
       return res.status(400).json({ error: 'Missing required session parameters.' });
@@ -443,6 +488,11 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
     const displayName = className || slotTitle || 'Fleetwood Boxing Session';
     const description = className ? 'Fleetwood Boxing Gym Class Booking' : 'Private/Group session booking';
     const flowType = slotId ? 'COACH_SLOT' : guestBooking ? 'GUEST' : 'CLASS';
+    
+    // Determine if this is a recurring payment
+    const isRecurring = paymentMethod === 'WEEKLY' || paymentMethod === 'MONTHLY';
+    const isPerSession = paymentMethod === 'PER_SESSION';
+    
     const metadata = {
       flowType,
       classId: classId || '',
@@ -459,8 +509,66 @@ apiRouter.post('/create-checkout-session', express.json(), async (req, res) => {
       guestContactEmail: guestBooking?.contactEmail || '',
       guestContactPhone: guestBooking?.contactPhone || '',
       guestBooking: guestBooking ? JSON.stringify(guestBooking) : '',
+      paymentMethod: paymentMethod || 'ONE_OFF',
+      billingFrequency: billingFrequency || '',
     };
 
+    // For PER_SESSION billing, create booking without payment
+    if (isPerSession) {
+      // Create a "pending" session that doesn't require payment
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: { 
+              name: displayName,
+              description: `${description} - Bill per session`,
+             },
+            unit_amount: 0, // No charge upfront
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata: {
+          ...metadata,
+          paymentMethod: 'PER_SESSION',
+          skipPayment: 'true',
+        },
+      });
+      return res.status(200).json({ id: session.id });
+    }
+
+    // For recurring payments, create a subscription
+    if (isRecurring) {
+      const interval = billingFrequency === 'WEEKLY' ? 'week' : 'month';
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'gbp',
+            product_data: { 
+              name: displayName,
+              description: `${description} - ${billingFrequency} billing`,
+             },
+            unit_amount: priceInPence,
+            recurring: {
+              interval: interval,
+            },
+          },
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        metadata,
+      });
+      return res.status(200).json({ id: session.id });
+    }
+
+    // For ONE_OFF, create a one-time payment
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -520,6 +628,127 @@ apiRouter.post('/finalize-checkout-session', express.json(), async (req, res) =>
   } catch (error) {
     console.error('Failed to finalize checkout session:', error.message);
     return res.status(500).json({ error: error.message || 'Unable to finalize checkout session.' });
+  }
+});
+
+// POST /server-api/send-monthly-statement
+apiRouter.post('/send-monthly-statement', express.json(), async (req, res) => {
+  const { sendMonthlyStatement } = require('./services/emailService');
+  try {
+    const result = await sendMonthlyStatement(req.body);
+    if (result.success) {
+      return res.json({ success: true });
+    } else {
+      return res.status(500).json({ error: result.error || 'Failed to send statement' });
+    }
+  } catch (error) {
+    console.error('Error sending monthly statement:', error.message);
+    return res.status(500).json({ error: error.message || 'Failed to send statement' });
+  }
+});
+
+// POST /server-api/send-invoice-reminder
+apiRouter.post('/send-invoice-reminder', express.json(), async (req, res) => {
+  const { sendInvoiceReminder } = require('./services/emailService');
+  try {
+    const result = await sendInvoiceReminder(req.body);
+    if (result.success) {
+      return res.json({ success: true });
+    } else {
+      return res.status(500).json({ error: result.error || 'Failed to send reminder' });
+    }
+  } catch (error) {
+    console.error('Error sending invoice reminder:', error.message);
+    return res.status(500).json({ error: error.message || 'Failed to send reminder' });
+  }
+});
+
+// POST /server-api/generate-monthly-statements
+// This endpoint can be called by a cron job to generate and send monthly statements
+apiRouter.post('/generate-monthly-statements', express.json(), async (req, res) => {
+  const { sendMonthlyStatement } = require('./services/emailService');
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return res.status(500).json({ error: 'Database not configured' });
+  }
+
+  try {
+    // Get the current month's start and end dates
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    
+    // Find all customers with monthly billing
+    const { data: monthlyCustomers, error: customerError } = await supabase
+      .from('guest_bookings')
+      .select('contact_email, contact_name, stripe_customer_id')
+      .eq('payment_method', 'MONTHLY')
+      .not('contact_email', 'is', null);
+    
+    if (customerError) {
+      console.error('Error fetching monthly customers:', customerError);
+      return res.status(500).json({ error: 'Failed to fetch customers' });
+    }
+
+    // Get unique customers
+    const uniqueCustomers = Array.from(
+      new Map(monthlyCustomers.map(c => [c.contact_email, c])).values()
+    );
+
+    const results = [];
+    
+    for (const customer of uniqueCustomers) {
+      // Get all transactions for this customer in the current month
+      const { data: transactions, error: txError } = await supabase
+        .from('transactions')
+        .select('id, description, amount, source, created_at')
+        .eq('stripe_customer_id', customer.stripe_customer_id)
+        .gte('created_at', monthStart.toISOString())
+        .lte('created_at', monthEnd.toISOString())
+        .order('created_at', { ascending: true });
+      
+      if (txError) {
+        console.error(`Error fetching transactions for ${customer.contact_email}:`, txError);
+        continue;
+      }
+
+      if (!transactions || transactions.length === 0) {
+        continue; // Skip customers with no transactions this month
+      }
+
+      const totalAmount = transactions.reduce((sum, tx) => sum + (parseFloat(tx.amount) || 0), 0);
+      
+      const statementData = {
+        contactEmail: customer.contact_email,
+        contactName: customer.contact_name || 'Customer',
+        statementPeriodStart: monthStart.toISOString().split('T')[0],
+        statementPeriodEnd: monthEnd.toISOString().split('T')[0],
+        totalAmount,
+        currency: 'GBP',
+        lineItems: transactions.map(tx => ({
+          description: tx.description || 'Service',
+          amount: parseFloat(tx.amount) || 0,
+          serviceType: tx.source,
+          serviceDate: tx.created_at ? tx.created_at.split('T')[0] : undefined,
+        })),
+      };
+
+      const result = await sendMonthlyStatement(statementData);
+      results.push({
+        email: customer.contact_email,
+        success: result.success,
+        error: result.error,
+      });
+    }
+
+    return res.json({
+      success: true,
+      processed: results.length,
+      results,
+    });
+  } catch (error) {
+    console.error('Error generating monthly statements:', error.message);
+    return res.status(500).json({ error: error.message || 'Failed to generate statements' });
   }
 });
 
@@ -652,7 +881,9 @@ apiRouter.post('/whatsapp-webhook', express.raw({ type: 'application/json' }), a
     return res.status(200).send('OK');
   }
 
-  const { from, text } = messageData;
+  const { from, text, to } = messageData; // 'to' is the recipient (coach's number), 'from' is the sender (customer)
+  
+  console.log(`[WhatsApp] Incoming message from ${from} to ${to || 'unknown'}`);
   
   try {
     const getSupabaseAdmin = () => {
@@ -669,7 +900,7 @@ apiRouter.post('/whatsapp-webhook', express.raw({ type: 'application/json' }), a
       return supabaseAdmin;
     };
     
-    // Find coach by phone number
+    // Find coach by phone number (match the recipient number, not sender)
     const supabase = getSupabaseAdmin();
     if (!supabase) {
       console.error('[WhatsApp] Supabase not configured');
@@ -689,19 +920,37 @@ apiRouter.post('/whatsapp-webhook', express.raw({ type: 'application/json' }), a
 
     // Normalize phone numbers for matching
     const normalizePhone = (phone) => {
+      if (!phone) return null;
       const normalized = normalizePhoneNumber(phone);
       return normalized || phone.replace(/[^\d+]/g, '').replace(/^0/, '+44');
     };
     
-    const normalizedFrom = normalizePhone(from);
+    // Match the recipient number (to) with coach's mobile_number
+    // This is the number the message was sent TO (Sean's number: 07482945828)
+    const recipientNumber = messageData.to || messageData.displayPhoneNumber;
+    const normalizedRecipient = normalizePhone(recipientNumber);
+    
+    console.log(`[WhatsApp] Message from ${from} to recipient: ${recipientNumber} (normalized: ${normalizedRecipient})`);
+    console.log(`[WhatsApp] Looking for coach with number matching: ${normalizedRecipient || recipientNumber}`);
     
     const coach = coaches?.find(c => {
       if (!c.mobile_number) return false;
       const normalizedCoachPhone = normalizePhone(c.mobile_number);
-      return normalizedCoachPhone === normalizedFrom || 
-             normalizedCoachPhone.endsWith(normalizedFrom.slice(-10)) ||
-             normalizedFrom.endsWith(normalizedCoachPhone.slice(-10));
+      const match = normalizedCoachPhone === normalizedRecipient || 
+             (normalizedCoachPhone && normalizedRecipient && (
+               normalizedCoachPhone.endsWith(normalizedRecipient.slice(-10)) ||
+               normalizedRecipient.endsWith(normalizedCoachPhone.slice(-10))
+             ));
+      if (match) {
+        console.log(`[WhatsApp] ✅ Found matching coach: ${c.name} (${c.mobile_number} -> ${normalizedCoachPhone})`);
+      }
+      return match;
     });
+    
+    if (!coach && recipientNumber) {
+      console.log(`[WhatsApp] ⚠️ No coach found matching recipient number: ${recipientNumber}`);
+      console.log(`[WhatsApp] Available coach numbers: ${coaches.map(c => c.mobile_number).join(', ')}`);
+    }
 
     // Check if message is about availability
     if (!isAvailabilityQuestion(text)) {
