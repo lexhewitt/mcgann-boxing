@@ -1,6 +1,9 @@
 -- Seed Sean McGann as Head Coach
 -- Run this in Supabase SQL Editor
 
+-- First, check if Sean exists by email and delete if needed (to avoid conflicts)
+DELETE FROM coaches WHERE email = 'sean@fleetwoodboxing.co.uk';
+
 -- Insert Sean McGann as Head Coach
 INSERT INTO coaches (
   id,
@@ -26,17 +29,7 @@ INSERT INTO coaches (
   '10-20-30 12345678',
   true,
   now()
-)
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  email = EXCLUDED.email,
-  role = EXCLUDED.role,
-  level = EXCLUDED.level,
-  bio = EXCLUDED.bio,
-  image_url = EXCLUDED.image_url,
-  mobile_number = EXCLUDED.mobile_number,
-  bank_details = EXCLUDED.bank_details,
-  whatsapp_auto_reply_enabled = EXCLUDED.whatsapp_auto_reply_enabled;
+);
 
 -- Verify Sean was inserted
 SELECT 
