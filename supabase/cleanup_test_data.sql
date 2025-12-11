@@ -51,11 +51,79 @@ FROM members
 GROUP BY data_type
 ORDER BY count DESC;
 
--- 4. SAFE DELETE: Remove test members (uncomment to use)
+-- 4. SAFE DELETE: Remove test members and all related data
 -- WARNING: This will delete test members and all related data (bookings, transactions, etc.)
 -- Review the SELECT queries above first to make sure you're deleting the right records!
+-- 
+-- IMPORTANT: This script deletes related data FIRST to avoid foreign key constraint errors.
+-- Run this in a transaction so you can rollback if needed.
 
+-- Step 1: Identify test member IDs
+-- Run this first to see what will be deleted:
 /*
+SELECT id, name, email FROM members
+WHERE 
+  email LIKE '%@example.com' 
+  OR email LIKE 'test%@%'
+  OR name LIKE 'Test%' 
+  OR name LIKE '%Test%'
+  OR name = 'John Doe';
+*/
+
+-- Step 2: Delete related data first, then members
+-- Uncomment and run this to actually delete:
+/*
+BEGIN;
+
+-- Delete bookings for test members
+DELETE FROM bookings
+WHERE member_id IN (
+  SELECT id FROM members
+  WHERE 
+    email LIKE '%@example.com' 
+    OR email LIKE 'test%@%'
+    OR name LIKE 'Test%' 
+    OR name LIKE '%Test%'
+    OR name = 'John Doe'
+);
+
+-- Delete transactions for test members
+DELETE FROM transactions
+WHERE member_id IN (
+  SELECT id FROM members
+  WHERE 
+    email LIKE '%@example.com' 
+    OR email LIKE 'test%@%'
+    OR name LIKE 'Test%' 
+    OR name LIKE '%Test%'
+    OR name = 'John Doe'
+);
+
+-- Delete family members for test members
+DELETE FROM family_members
+WHERE parent_id IN (
+  SELECT id FROM members
+  WHERE 
+    email LIKE '%@example.com' 
+    OR email LIKE 'test%@%'
+    OR name LIKE 'Test%' 
+    OR name LIKE '%Test%'
+    OR name = 'John Doe'
+);
+
+-- Delete coach appointments for test members
+DELETE FROM coach_appointments
+WHERE member_id IN (
+  SELECT id FROM members
+  WHERE 
+    email LIKE '%@example.com' 
+    OR email LIKE 'test%@%'
+    OR name LIKE 'Test%' 
+    OR name LIKE '%Test%'
+    OR name = 'John Doe'
+);
+
+-- Finally, delete the test members themselves
 DELETE FROM members
 WHERE 
   email LIKE '%@example.com' 
@@ -63,6 +131,10 @@ WHERE
   OR name LIKE 'Test%' 
   OR name LIKE '%Test%'
   OR name = 'John Doe';
+
+-- Review the changes before committing
+-- If everything looks good, run: COMMIT;
+-- If something went wrong, run: ROLLBACK;
 */
 
 -- 5. View all bookings for test members (before deleting)
