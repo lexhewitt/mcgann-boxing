@@ -20,6 +20,7 @@ interface DataContextType {
   coachSlots: CoachSlot[];
   coachAppointments: CoachAppointment[];
   guestBookings: GuestBooking[];
+  refreshData: () => Promise<void>;
   createClassTransferRequest: (classId: string, targetCoachId: string, note: string, actor: AppUser) => void;
   acceptClassTransfer: (notificationId: string, actor: AppUser) => void;
   undoClassTransfer: (classId: string, actor: AppUser) => void;
@@ -72,145 +73,150 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [coachAppointments, setCoachAppointments] = useState<CoachAppointment[]>(INITIAL_COACH_APPOINTMENTS);
   const [guestBookings, setGuestBookings] = useState<GuestBooking[]>([]);
   const [bookingAlerts, setBookingAlerts] = useState<BookingAlert[]>([]);
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const response = await fetch('/server-api/bootstrap-data');
-        if (response.ok) {
-          const data = await response.json();
-          setCoaches(data.coaches);
-          setMembers(data.members);
-          setFamilyMembers(data.familyMembers);
-          setClasses(data.classes);
-          setBookings(data.bookings);
-          setCoachSlots(data.coachSlots);
-          setCoachAppointments(data.coachAppointments);
-          setTransactions(data.transactions);
-          setGuestBookings(data.guestBookings);
-          return;
-        }
-      } catch (error) {
-        console.error('Bootstrap data fetch failed', error);
-      }
-
-      const supabaseClient = getSupabase();
-      if (!supabaseClient) {
-        console.warn('Supabase client not available, using local data only');
+  
+  const loadData = async () => {
+    try {
+      const response = await fetch('/server-api/bootstrap-data');
+      if (response.ok) {
+        const data = await response.json();
+        setCoaches(data.coaches);
+        setMembers(data.members);
+        setFamilyMembers(data.familyMembers);
+        setClasses(data.classes);
+        setBookings(data.bookings);
+        setCoachSlots(data.coachSlots);
+        setCoachAppointments(data.coachAppointments);
+        setTransactions(data.transactions);
+        setGuestBookings(data.guestBookings);
         return;
       }
-      try {
-        const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes] =
-          await Promise.all([
-            supabaseClient.from('coaches').select('*'),
-            supabaseClient.from('members').select('*'),
-            supabaseClient.from('family_members').select('*'),
-            supabaseClient.from('classes').select('*'),
-            supabaseClient.from('bookings').select('*'),
-            supabaseClient.from('coach_slots').select('*'),
-            supabaseClient.from('coach_appointments').select('*'),
-            supabaseClient.from('transactions').select('*'),
-            supabaseClient.from('guest_bookings').select('*'),
-          ]);
+    } catch (error) {
+      console.error('Bootstrap data fetch failed', error);
+    }
 
-        if (!coachesRes.error && coachesRes.data) {
-          const mapped = (coachesRes.data as any[]).map(row => ({
-            id: row.id,
-            name: row.name,
-            email: row.email,
-            role: row.role,
-            level: row.level,
-            bio: row.bio,
-            imageUrl: row.image_url,
-            mobileNumber: row.mobile_number,
-            bankDetails: row.bank_details,
-            whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
-            whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
-          })) as Coach[];
-          setCoaches(mapped);
-        }
-        if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
-        if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
-        if (!classesRes.error && classesRes.data) setClasses(classesRes.data as GymClass[]);
-        if (!bookingsRes.error && bookingsRes.data) {
-          const mapped = bookingsRes.data.map((b: any) => ({
-            id: b.id,
-            memberId: b.member_id,
-            participantId: b.participant_id || b.participant_family_id || b.member_id,
-            classId: b.class_id,
-            bookingDate: b.booking_date,
-            paid: b.paid,
-            attended: b.attended,
-            confirmationStatus: b.confirmation_status,
-            sessionStart: b.session_start,
-          })) as Booking[];
-          setBookings(mapped);
-        }
-        if (!slotsRes.error && slotsRes.data) {
-          const mapped = (slotsRes.data as any[]).map(row => ({
-            id: row.id,
-            coachId: row.coach_id,
-            type: row.type,
-            title: row.title,
-            description: row.description,
-            start: row.start,
-            end: row.end,
-            capacity: row.capacity,
-            price: Number(row.price),
-            location: row.location,
-          })) as CoachSlot[];
-          setCoachSlots(mapped);
-        }
-        if (!apptsRes.error && apptsRes.data) {
-          const mapped = (apptsRes.data as any[]).map(row => ({
-            id: row.id,
-            slotId: row.slot_id,
-            memberId: row.member_id,
-            participantName: row.participant_name,
-            status: row.status,
-            createdAt: row.created_at,
-          })) as CoachAppointment[];
-          setCoachAppointments(mapped);
-        }
-        if (!txRes.error && txRes.data) {
-          const mapped = (txRes.data as any[]).map(row => ({
-            id: row.id,
-            memberId: row.member_id,
-            coachId: row.coach_id,
-            bookingId: row.booking_id,
-            slotId: row.slot_id,
-            amount: Number(row.amount),
-            currency: row.currency,
-            source: row.source,
-            status: row.status,
-            description: row.description,
-            stripeSessionId: row.stripe_session_id,
-            createdAt: row.created_at,
-            settledAt: row.settled_at,
-            confirmationStatus: row.confirmation_status,
-          })) as Transaction[];
-          setTransactions(mapped);
-        }
-        if (!guestRes.error && guestRes.data) {
-          const mapped = (guestRes.data as any[]).map(row => ({
-            id: row.id,
-            serviceType: row.service_type,
-            referenceId: row.reference_id,
-            title: row.title,
-            date: row.date,
-            participantName: row.participant_name,
-            contactName: row.contact_name,
-            contactEmail: row.contact_email,
-            contactPhone: row.contact_phone,
-            status: row.status,
-            createdAt: row.created_at,
-          })) as GuestBooking[];
-          setGuestBookings(mapped);
-        }
-      } catch (error) {
-        console.error('Failed to load data from Supabase', error);
+    const supabaseClient = getSupabase();
+    if (!supabaseClient) {
+      console.warn('Supabase client not available, using local data only');
+      return;
+    }
+    try {
+      const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes] =
+        await Promise.all([
+          supabaseClient.from('coaches').select('*'),
+          supabaseClient.from('members').select('*'),
+          supabaseClient.from('family_members').select('*'),
+          supabaseClient.from('classes').select('*'),
+          supabaseClient.from('bookings').select('*'),
+          supabaseClient.from('coach_slots').select('*'),
+          supabaseClient.from('coach_appointments').select('*'),
+          supabaseClient.from('transactions').select('*'),
+          supabaseClient.from('guest_bookings').select('*'),
+        ]);
+
+      if (!coachesRes.error && coachesRes.data) {
+        const mapped = (coachesRes.data as any[]).map(row => ({
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          level: row.level,
+          bio: row.bio,
+          imageUrl: row.image_url,
+          mobileNumber: row.mobile_number,
+          bankDetails: row.bank_details,
+          whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
+          whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
+        })) as Coach[];
+        setCoaches(mapped);
       }
-    };
+      if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
+      if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
+      if (!classesRes.error && classesRes.data) setClasses(classesRes.data as GymClass[]);
+      if (!bookingsRes.error && bookingsRes.data) {
+        const mapped = bookingsRes.data.map((b: any) => ({
+          id: b.id,
+          memberId: b.member_id,
+          participantId: b.participant_id || b.participant_family_id || b.member_id,
+          classId: b.class_id,
+          bookingDate: b.booking_date,
+          paid: b.paid,
+          attended: b.attended,
+          confirmationStatus: b.confirmation_status,
+          sessionStart: b.session_start,
+        })) as Booking[];
+        setBookings(mapped);
+      }
+      if (!slotsRes.error && slotsRes.data) {
+        const mapped = (slotsRes.data as any[]).map(row => ({
+          id: row.id,
+          coachId: row.coach_id,
+          type: row.type,
+          title: row.title,
+          description: row.description,
+          start: row.start,
+          end: row.end,
+          capacity: row.capacity,
+          price: Number(row.price),
+          location: row.location,
+        })) as CoachSlot[];
+        setCoachSlots(mapped);
+      }
+      if (!apptsRes.error && apptsRes.data) {
+        const mapped = (apptsRes.data as any[]).map(row => ({
+          id: row.id,
+          slotId: row.slot_id,
+          memberId: row.member_id,
+          participantName: row.participant_name,
+          status: row.status,
+          createdAt: row.created_at,
+        })) as CoachAppointment[];
+        setCoachAppointments(mapped);
+      }
+      if (!txRes.error && txRes.data) {
+        const mapped = (txRes.data as any[]).map(row => ({
+          id: row.id,
+          memberId: row.member_id,
+          coachId: row.coach_id,
+          bookingId: row.booking_id,
+          slotId: row.slot_id,
+          amount: Number(row.amount),
+          currency: row.currency,
+          source: row.source,
+          status: row.status,
+          description: row.description,
+          stripeSessionId: row.stripe_session_id,
+          createdAt: row.created_at,
+          settledAt: row.settled_at,
+          confirmationStatus: row.confirmation_status,
+        })) as Transaction[];
+        setTransactions(mapped);
+      }
+      if (!guestRes.error && guestRes.data) {
+        const mapped = (guestRes.data as any[]).map(row => ({
+          id: row.id,
+          serviceType: row.service_type,
+          referenceId: row.reference_id,
+          title: row.title,
+          date: row.date,
+          participantName: row.participant_name,
+          contactName: row.contact_name,
+          contactEmail: row.contact_email,
+          contactPhone: row.contact_phone,
+          status: row.status,
+          createdAt: row.created_at,
+        })) as GuestBooking[];
+        setGuestBookings(mapped);
+      }
+    } catch (error) {
+      console.error('Failed to load data from Supabase', error);
+    }
+  };
 
+  const refreshData = async () => {
+    await loadData();
+  };
+
+  useEffect(() => {
     loadData();
   }, []);
   const CANCELLATION_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -252,17 +258,34 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return newTransaction;
   };
 
-  const updateTransaction = (transactionId: string, updates: Partial<Transaction>) => {
+  const updateTransaction = async (transactionId: string, updates: Partial<Transaction>) => {
     setTransactions(prev => prev.map(tx => tx.id === transactionId ? { ...tx, ...updates } : tx));
-    if (supabase) {
+    // Use server API to update transaction (requires admin permissions)
+    try {
       const payload: any = {};
       if (updates.status) payload.status = updates.status;
       if (updates.confirmationStatus) payload.confirmation_status = updates.confirmationStatus;
       if (updates.settledAt) payload.settled_at = updates.settledAt;
       if (updates.description) payload.description = updates.description;
-      supabase.from('transactions').update(payload).eq('id', transactionId).then(({ error }) => {
-        if (error) console.error('Supabase: update transaction failed', error.message);
+      if (updates.paymentMethod) payload.payment_method = updates.paymentMethod;
+      if (updates.billingFrequency) payload.billing_frequency = updates.billingFrequency;
+      if (updates.stripeCustomerId) payload.stripe_customer_id = updates.stripeCustomerId;
+      if (updates.stripeSubscriptionId) payload.stripe_subscription_id = updates.stripeSubscriptionId;
+      
+      const response = await fetch('/server-api/update-transaction', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transactionId, updates: payload }),
       });
+      
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Unknown error' }));
+        console.error('Failed to update transaction:', error);
+      } else {
+        console.log(`[DataContext] Transaction ${transactionId} updated:`, updates);
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
     }
   };
 
@@ -1081,7 +1104,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, cancelBooking, cancelCoachAppointment, cancelGuestBooking, acknowledgeBookingAlert }}>
+    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, refreshData, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, cancelBooking, cancelCoachAppointment, cancelGuestBooking, acknowledgeBookingAlert }}>
       {children}
     </DataContext.Provider>
   );

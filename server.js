@@ -449,6 +449,31 @@ const handleCheckoutSessionCompleted = async (session) => {
 // --- API Route Definitions ---
 
 // GET /server-api/stripe-config
+apiRouter.post('/update-transaction', express.json(), async (req, res) => {
+  try {
+    const { transactionId, updates } = req.body;
+    if (!transactionId || !updates) {
+      return res.status(400).json({ error: 'transactionId and updates are required' });
+    }
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase admin client not configured' });
+    }
+    const { error } = await supabase
+      .from('transactions')
+      .update(updates)
+      .eq('id', transactionId);
+    if (error) {
+      console.error('Failed to update transaction:', error);
+      return res.status(500).json({ error: error.message });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating transaction:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 apiRouter.get('/stripe-config', (req, res) => {
   const publishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
   if (!publishableKey) {

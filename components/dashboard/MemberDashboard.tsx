@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Coach, Member, UserRole, FamilyMember } from '../../types';
@@ -33,9 +33,24 @@ const HealthAndSafetyNotice: React.FC = () => (
 
 const MemberDashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
-    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, transactions, coachAppointments, coachSlots, cancelBooking, cancelCoachAppointment } = useData();
+    const { members, bookings, classes, coaches, familyMembers, deleteFamilyMember, transactions, coachAppointments, coachSlots, cancelBooking, cancelCoachAppointment, refreshData } = useData();
     const [isEditing, setIsEditing] = useState(false);
     const [isAddFamilyMemberOpen, setAddFamilyMemberOpen] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            refreshData();
+        }, 30000);
+        return () => clearInterval(interval);
+    }, [refreshData]);
+    
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await refreshData();
+        setIsRefreshing(false);
+    };
     
     if (!currentUser || currentUser.role !== UserRole.MEMBER) return null;
     
@@ -130,6 +145,17 @@ const MemberDashboard: React.FC = () => {
 
             {/* Health & Safety Notice */}
             <HealthAndSafetyNotice />
+
+            {/* Refresh Button */}
+            <div className="flex justify-end mb-4">
+                <Button
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="text-sm"
+                >
+                    {isRefreshing ? 'Refreshing...' : '🔄 Refresh'}
+                </Button>
+            </div>
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
