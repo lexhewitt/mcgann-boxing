@@ -51,6 +51,8 @@ const bootstrapTables = async () => {
     apptsRes,
     txRes,
     guestRes,
+    classCoachesRes,
+    slotCoachesRes,
   ] = await Promise.all([
     supabase.from('coaches').select('*'),
     supabase.from('members').select('*'),
@@ -61,6 +63,8 @@ const bootstrapTables = async () => {
     supabase.from('coach_appointments').select('*'),
     supabase.from('transactions').select('*'),
     supabase.from('guest_bookings').select('*'),
+    supabase.from('class_coaches').select('*'),
+    supabase.from('slot_coaches').select('*'),
   ]);
 
   const ensureOk = (res, name) => {
@@ -83,19 +87,62 @@ const bootstrapTables = async () => {
       sessionStart: b.session_start,
     }));
 
-  const mapSlots = (rows) =>
-    rows.map((row) => ({
-      id: row.id,
-      coachId: row.coach_id,
-      type: row.type,
-      title: row.title,
-      description: row.description,
-      start: row.start,
-      end: row.end,
-      capacity: row.capacity,
-      price: Number(row.price),
-      location: row.location,
-    }));
+  // Map classes with multiple coaches
+  const mapClasses = (classRows, classCoachRows) => {
+    const classCoachMap = {};
+    (classCoachRows || []).forEach(cc => {
+      if (!classCoachMap[cc.class_id]) {
+        classCoachMap[cc.class_id] = [];
+      }
+      classCoachMap[cc.class_id].push(cc.coach_id);
+    });
+
+    return classRows.map((b) => {
+      const coachIds = classCoachMap[b.id] || [];
+      return {
+        id: b.id,
+        name: b.name,
+        description: b.description,
+        day: b.day,
+        time: b.time,
+        coachId: b.coach_id,
+        coachIds: coachIds.length > 1 ? coachIds : undefined,
+        capacity: b.capacity,
+        price: Number(b.price),
+        minAge: b.min_age,
+        maxAge: b.max_age,
+        originalCoachId: b.original_coach_id,
+      };
+    });
+  };
+
+  // Map slots with multiple coaches
+  const mapSlotsWithCoaches = (slotRows, slotCoachRows) => {
+    const slotCoachMap = {};
+    (slotCoachRows || []).forEach(sc => {
+      if (!slotCoachMap[sc.slot_id]) {
+        slotCoachMap[sc.slot_id] = [];
+      }
+      slotCoachMap[sc.slot_id].push(sc.coach_id);
+    });
+
+    return slotRows.map((row) => {
+      const coachIds = slotCoachMap[row.id] || [];
+      return {
+        id: row.id,
+        coachId: row.coach_id,
+        coachIds: coachIds.length > 1 ? coachIds : undefined,
+        type: row.type,
+        title: row.title,
+        description: row.description,
+        start: row.start,
+        end: row.end,
+        capacity: row.capacity,
+        price: Number(row.price),
+        location: row.location,
+      };
+    });
+  };
 
   const mapAppointments = (rows) =>
     rows.map((row) => ({
@@ -159,9 +206,9 @@ const bootstrapTables = async () => {
     coaches: mapCoaches(ensureOk(coachesRes, 'coaches')),
     members: ensureOk(membersRes, 'members'),
     familyMembers: ensureOk(familyRes, 'family members'),
-    classes: ensureOk(classesRes, 'classes'),
+    classes: mapClasses(ensureOk(classesRes, 'classes'), ensureOk(classCoachesRes, 'class_coaches')),
     bookings: mapBookings(ensureOk(bookingsRes, 'bookings')),
-    coachSlots: mapSlots(ensureOk(slotsRes, 'coach slots')),
+    coachSlots: mapSlotsWithCoaches(ensureOk(slotsRes, 'coach slots'), ensureOk(slotCoachesRes, 'slot_coaches')),
     coachAppointments: mapAppointments(ensureOk(apptsRes, 'coach appointments')),
     transactions: mapTransactions(ensureOk(txRes, 'transactions')),
     guestBookings: mapGuestBookings(ensureOk(guestRes, 'guest bookings')),

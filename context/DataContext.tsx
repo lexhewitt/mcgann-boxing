@@ -100,7 +100,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes] =
+      const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes, classCoachesRes, slotCoachesRes] =
         await Promise.all([
           supabaseClient.from('coaches').select('*'),
           supabaseClient.from('members').select('*'),
@@ -111,6 +111,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabaseClient.from('coach_appointments').select('*'),
           supabaseClient.from('transactions').select('*'),
           supabaseClient.from('guest_bookings').select('*'),
+          supabaseClient.from('class_coaches').select('*'),
+          supabaseClient.from('slot_coaches').select('*'),
         ]);
 
       if (!coachesRes.error && coachesRes.data) {
@@ -146,21 +148,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         })) as Booking[];
         setBookings(mapped);
       }
-      if (!slotsRes.error && slotsRes.data) {
-        const mapped = (slotsRes.data as any[]).map(row => ({
-          id: row.id,
-          coachId: row.coach_id,
-          type: row.type,
-          title: row.title,
-          description: row.description,
-          start: row.start,
-          end: row.end,
-          capacity: row.capacity,
-          price: Number(row.price),
-          location: row.location,
-        })) as CoachSlot[];
-        setCoachSlots(mapped);
-      }
+        if (!slotsRes.error && slotsRes.data) {
+          // Map slots with multiple coaches
+          const slotCoachMap: Record<string, string[]> = {};
+          if (!slotCoachesRes.error && slotCoachesRes.data) {
+            (slotCoachesRes.data as any[]).forEach(sc => {
+              if (!slotCoachMap[sc.slot_id]) {
+                slotCoachMap[sc.slot_id] = [];
+              }
+              slotCoachMap[sc.slot_id].push(sc.coach_id);
+            });
+          }
+          const mapped = (slotsRes.data as any[]).map(row => {
+            const coachIds = slotCoachMap[row.id] || [];
+            return {
+              id: row.id,
+              coachId: row.coach_id,
+              coachIds: coachIds.length > 1 ? coachIds : undefined,
+              type: row.type,
+              title: row.title,
+              description: row.description,
+              start: row.start,
+              end: row.end,
+              capacity: row.capacity,
+              price: Number(row.price),
+              location: row.location,
+            } as CoachSlot;
+          });
+          setCoachSlots(mapped);
+        }
       if (!apptsRes.error && apptsRes.data) {
         const mapped = (apptsRes.data as any[]).map(row => ({
           id: row.id,
@@ -1030,11 +1046,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setClasses(prev => prev.map(c => c.id === updatedClass.id ? updatedClass : c));
   };
 
-  const addClass = (newClassData: Omit<GymClass, 'id'>) => {
+  const addClass = async (newClassData: Omit<GymClass, 'id'>) => {
     const newClass: GymClass = { ...newClassData, id: `cl${Date.now()}` };
     setClasses(prev => [...prev, newClass]);
-    if (supabase) {
-      supabase.from('classes').insert({
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      // Insert the class
+      const { error: classError } = await supabaseClient.from('classes').insert({
         id: newClass.id,
         name: newClass.name,
         description: newClass.description,
@@ -1046,9 +1064,36 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         min_age: newClass.minAge,
         max_age: newClass.maxAge,
         original_coach_id: newClass.originalCoachId,
-      }).then(({ error }) => {
-        if (error) console.error('Supabase: insert class failed', error.message);
       });
+      
+      if (classError) {
+        console.error('Supabase: insert class failed', classError.message);
+        return;
+      }
+
+      // Insert multiple coaches if provided
+      if (newClass.coachIds && newClass.coachIds.length > 0) {
+        const coachInserts = newClass.coachIds.map(coachId => ({
+          id: `cc_${newClass.id}_${coachId}`,
+          class_id: newClass.id,
+          coach_id: coachId,
+        }));
+        
+        const { error: coachesError } = await supabaseClient.from('class_coaches').insert(coachInserts);
+        if (coachesError) {
+          console.error('Supabase: insert class coaches failed', coachesError.message);
+        }
+      } else {
+        // If no coachIds array, create a single junction record for the primary coach
+        const { error: coachError } = await supabaseClient.from('class_coaches').insert({
+          id: `cc_${newClass.id}_${newClass.coachId}`,
+          class_id: newClass.id,
+          coach_id: newClass.coachId,
+        });
+        if (coachError) {
+          console.error('Supabase: insert class coach failed', coachError.message);
+        }
+      }
     }
   };
 

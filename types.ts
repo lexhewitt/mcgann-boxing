@@ -53,7 +53,8 @@ export interface GymClass {
   description: string;
   day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   time: string;
-  coachId: string;
+  coachId: string; // Primary coach (for backward compatibility)
+  coachIds?: string[]; // Multiple coaches (for large classes)
   capacity: number;
   price: number;
   minAge?: number;
@@ -140,7 +141,8 @@ export enum SlotType {
 
 export interface CoachSlot {
   id: string;
-  coachId: string;
+  coachId: string; // Primary coach (for backward compatibility)
+  coachIds?: string[]; // Multiple coaches (for group sessions)
   type: SlotType;
   title: string;
   description?: string;

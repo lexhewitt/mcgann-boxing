@@ -30,7 +30,8 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
   const [dayTimes, setDayTimes] = useState<Record<string, { start: string; end: string }>>({});
 
   // Step 3: Coach and capacity
-  const [coachId, setCoachId] = useState('');
+  const [coachId, setCoachId] = useState(''); // Primary coach (for backward compatibility)
+  const [coachIds, setCoachIds] = useState<string[]>([]); // Multiple coaches
   const [capacity, setCapacity] = useState('');
   const [price, setPrice] = useState('');
 
@@ -115,8 +116,8 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
     }
     
     if (step === 'coach') {
-      if (!coachId) {
-        setError('Please select a coach');
+      if (coachIds.length === 0) {
+        setError('Please select at least one coach');
         return;
       }
       if (!capacity || parseInt(capacity) <= 0) {
@@ -143,27 +144,41 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
   const handleFinish = () => {
     setError('');
 
+    // Validate coaches selected
+    if (coachIds.length === 0) {
+      setError('Please select at least one coach');
+      return;
+    }
+
+    // Ensure primary coach is set
+    if (!coachId && coachIds.length > 0) {
+      setCoachId(coachIds[0]);
+    }
+
     const daysToCreate = isRecurring ? selectedDays : selectedDays;
     
-    // Check availability for each day
-    for (const day of daysToCreate) {
-      const times = dayTimes[day] || { start: startTime, end: endTime };
-      const combinedTime = `${times.start} – ${times.end}`;
-      
-      const nextClassDate = getNextDateForDay(day as typeof daysOfWeek[number]);
-      const coachIsAvailableCheck = isCoachAvailable({
-        coachId,
-        day: day as typeof daysOfWeek[number],
-        time: combinedTime,
-        allClasses: classes,
-        coachAvailability,
-        unavailableSlots,
-        checkDate: nextClassDate,
-      });
+    // Check availability for each coach and each day
+    for (const coachIdToCheck of coachIds) {
+      for (const day of daysToCreate) {
+        const times = dayTimes[day] || { start: startTime, end: endTime };
+        const combinedTime = `${times.start} – ${times.end}`;
+        
+        const nextClassDate = getNextDateForDay(day as typeof daysOfWeek[number]);
+        const coachIsAvailableCheck = isCoachAvailable({
+          coachId: coachIdToCheck,
+          day: day as typeof daysOfWeek[number],
+          time: combinedTime,
+          allClasses: classes,
+          coachAvailability,
+          unavailableSlots,
+          checkDate: nextClassDate,
+        });
 
-      if (!coachIsAvailableCheck.isAvailable) {
-        setError(`Coach unavailable on ${day}: ${coachIsAvailableCheck.reason}`);
-        return;
+        if (!coachIsAvailableCheck.isAvailable) {
+          const coachName = coaches.find(c => c.id === coachIdToCheck)?.name || 'Coach';
+          setError(`${coachName} unavailable on ${day}: ${coachIsAvailableCheck.reason}`);
+          return;
+        }
       }
     }
 
@@ -177,7 +192,8 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
         description,
         day: day as typeof daysOfWeek[number],
         time: combinedTime,
-        coachId,
+        coachId: coachId || coachIds[0], // Primary coach
+        coachIds: coachIds.length > 1 ? coachIds : undefined, // Multiple coaches if more than one
         capacity: parseInt(capacity, 10),
         price: parseFloat(price),
       });
@@ -193,6 +209,7 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
     setEndTime('18:00');
     setDayTimes({});
     setCoachId('');
+    setCoachIds([]);
     setCapacity('');
     setPrice('');
     setError('');
@@ -209,6 +226,7 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
     setEndTime('18:00');
     setDayTimes({});
     setCoachId('');
+    setCoachIds([]);
     setCapacity('');
     setPrice('');
     setError('');
@@ -398,20 +416,66 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
         return (
           <div className="space-y-6">
             <div>
-              <h3 className="text-xl font-semibold text-white mb-2">Coach & Capacity</h3>
-              <p className="text-gray-400 text-sm mb-4">Assign a coach and set class capacity.</p>
+              <h3 className="text-xl font-semibold text-white mb-2">Coaches & Capacity</h3>
+              <p className="text-gray-400 text-sm mb-4">Select one or more coaches for this class. Large classes can have multiple coaches.</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Coach *</label>
-              <select
-                value={coachId}
-                onChange={(e) => setCoachId(e.target.value)}
-                className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
-                required
-              >
-                <option value="">Select a coach</option>
-                {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              <label className="block text-sm font-medium text-gray-300 mb-3">Select Coaches *</label>
+              <div className="bg-brand-dark border border-gray-600 rounded-md p-4 max-h-64 overflow-y-auto">
+                {coaches.map(coach => {
+                  const isSelected = coachIds.includes(coach.id);
+                  return (
+                    <label
+                      key={coach.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all ${
+                        isSelected
+                          ? 'bg-brand-red/20 border-2 border-brand-red'
+                          : 'bg-brand-gray/50 border-2 border-transparent hover:border-gray-500'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const newCoachIds = [...coachIds, coach.id];
+                            setCoachIds(newCoachIds);
+                            // Set primary coach if none selected
+                            if (!coachId) {
+                              setCoachId(coach.id);
+                            }
+                          } else {
+                            const newCoachIds = coachIds.filter(id => id !== coach.id);
+                            setCoachIds(newCoachIds);
+                            // Update primary coach if it was removed
+                            if (coachId === coach.id && newCoachIds.length > 0) {
+                              setCoachId(newCoachIds[0]);
+                            } else if (newCoachIds.length === 0) {
+                              setCoachId('');
+                            }
+                          }
+                        }}
+                        className="h-5 w-5 rounded border-gray-300 text-brand-red focus:ring-brand-red"
+                      />
+                      <div className="flex-1">
+                        <p className="text-white font-medium">{coach.name}</p>
+                        {coach.level && <p className="text-xs text-gray-400">{coach.level}</p>}
+                      </div>
+                      {coachIds.includes(coach.id) && coachIds[0] === coach.id && (
+                        <span className="text-xs text-brand-red font-semibold">Primary</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+              {coachIds.length > 0 && (
+                <p className="text-sm text-gray-400 mt-2">
+                  Selected: {coachIds.map(id => coaches.find(c => c.id === id)?.name).filter(Boolean).join(', ')}
+                </p>
+              )}
+              {coachIds.length === 0 && (
+                <p className="text-sm text-yellow-400 mt-2">Please select at least one coach</p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -444,7 +508,7 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
         );
 
       case 'review':
-        const selectedCoach = coaches.find(c => c.id === coachId);
+        const selectedCoaches = coachIds.map(id => coaches.find(c => c.id === id)).filter(Boolean);
         return (
           <div className="space-y-6">
             <div>
@@ -480,8 +544,23 @@ const ClassCreationWizard: React.FC<ClassCreationWizardProps> = ({ isOpen, onClo
                 </div>
               </div>
               <div>
-                <p className="text-sm text-gray-400 mb-1">Coach</p>
-                <p className="text-white font-semibold">{selectedCoach?.name || 'Not selected'}</p>
+                <p className="text-sm text-gray-400 mb-1">Coaches {coachIds.length > 1 && `(${coachIds.length})`}</p>
+                <div className="space-y-1 mt-2">
+                  {coachIds.map(id => {
+                    const coach = coaches.find(c => c.id === id);
+                    return coach ? (
+                      <div key={coach.id} className="bg-brand-gray p-2 rounded flex items-center justify-between">
+                        <p className="text-white font-medium">
+                          {coach.name}
+                          {coach.id === coachId && <span className="text-brand-red ml-2 text-xs">(Primary)</span>}
+                        </p>
+                      </div>
+                    ) : null;
+                  })}
+                  {coachIds.length === 0 && (
+                    <p className="text-yellow-400">No coaches selected</p>
+                  )}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
