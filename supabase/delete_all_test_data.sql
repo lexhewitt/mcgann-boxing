@@ -110,18 +110,7 @@ WHERE parent_id IN (
      OR name = 'John Doe'
 );
 
--- 7. Gym access logs (references members)
-DELETE FROM gym_access_logs
-WHERE member_id IN (
-  SELECT id FROM members
-  WHERE email LIKE '%@example.com' 
-     OR email LIKE 'test%@%'
-     OR name LIKE 'Test%' 
-     OR name LIKE '%Test%'
-     OR name = 'John Doe'
-);
-
--- 8. Guest bookings (if any test emails)
+-- 7. Guest bookings (if any test emails)
 DELETE FROM guest_bookings
 WHERE contact_email LIKE '%@example.com' 
    OR contact_email LIKE 'test%@%'
@@ -129,7 +118,7 @@ WHERE contact_email LIKE '%@example.com'
    OR contact_name LIKE '%Test%'
    OR contact_name = 'John Doe';
 
--- 9. Finally, delete the test members themselves
+-- 8. Finally, delete the test members themselves
 DELETE FROM members
 WHERE email LIKE '%@example.com' 
    OR email LIKE 'test%@%'

@@ -20,10 +20,58 @@ WHERE
 
 -- STEP 2: If the above looks correct, run the deletion below
 -- This deletes in the correct order to avoid foreign key errors
+-- IMPORTANT: Delete in this order because of foreign key constraints:
+-- 1. statement_line_items (references transactions and bookings)
+-- 2. transactions (references bookings, so must delete before bookings)
+-- 3. bookings (references members)
+-- 4. monthly_statements (references members)
+-- 5. coach_appointments (references members)
+-- 6. family_members (references members)
+-- 7. gym_access_logs (references members)
+-- 8. members (finally)
 
 BEGIN;
 
--- Delete bookings for test members
+-- Step 1: Delete statement line items for test members
+DELETE FROM statement_line_items
+WHERE statement_id IN (
+  SELECT id FROM monthly_statements
+  WHERE member_id IN (
+    SELECT id FROM members
+    WHERE 
+      email LIKE '%@example.com' 
+      OR email LIKE 'test%@%'
+      OR name LIKE 'Test%' 
+      OR name LIKE '%Test%'
+      OR name = 'John Doe'
+  )
+);
+
+-- Step 2: Delete transactions FIRST (they reference bookings)
+DELETE FROM transactions
+WHERE member_id IN (
+  SELECT id FROM members
+  WHERE 
+    email LIKE '%@example.com' 
+    OR email LIKE 'test%@%'
+    OR name LIKE 'Test%' 
+    OR name LIKE '%Test%'
+    OR name = 'John Doe'
+)
+OR booking_id IN (
+  SELECT id FROM bookings
+  WHERE member_id IN (
+    SELECT id FROM members
+    WHERE 
+      email LIKE '%@example.com' 
+      OR email LIKE 'test%@%'
+      OR name LIKE 'Test%' 
+      OR name LIKE '%Test%'
+      OR name = 'John Doe'
+  )
+);
+
+-- Step 3: Delete bookings (now safe since transactions are gone)
 DELETE FROM bookings
 WHERE member_id IN (
   SELECT id FROM members
@@ -35,8 +83,8 @@ WHERE member_id IN (
     OR name = 'John Doe'
 );
 
--- Delete transactions for test members
-DELETE FROM transactions
+-- Step 4: Delete monthly statements for test members
+DELETE FROM monthly_statements
 WHERE member_id IN (
   SELECT id FROM members
   WHERE 
@@ -47,19 +95,7 @@ WHERE member_id IN (
     OR name = 'John Doe'
 );
 
--- Delete family members for test members
-DELETE FROM family_members
-WHERE parent_id IN (
-  SELECT id FROM members
-  WHERE 
-    email LIKE '%@example.com' 
-    OR email LIKE 'test%@%'
-    OR name LIKE 'Test%' 
-    OR name LIKE '%Test%'
-    OR name = 'John Doe'
-);
-
--- Delete coach appointments for test members
+-- Step 5: Delete coach appointments for test members
 DELETE FROM coach_appointments
 WHERE member_id IN (
   SELECT id FROM members
@@ -71,9 +107,9 @@ WHERE member_id IN (
     OR name = 'John Doe'
 );
 
--- Delete gym access logs for test members
-DELETE FROM gym_access_logs
-WHERE member_id IN (
+-- Step 6: Delete family members for test members
+DELETE FROM family_members
+WHERE parent_id IN (
   SELECT id FROM members
   WHERE 
     email LIKE '%@example.com' 
@@ -83,7 +119,7 @@ WHERE member_id IN (
     OR name = 'John Doe'
 );
 
--- Finally, delete the test members themselves
+-- Step 7: Finally, delete the test members themselves
 DELETE FROM members
 WHERE 
   email LIKE '%@example.com' 
