@@ -942,9 +942,21 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         console.error('Supabase: insert member failed', error);
         console.error('Error details:', JSON.stringify(error, null, 2));
-        alert(`Failed to save member to database: ${error.message}\n\nCheck browser console for details.`);
+        
+        // Check for duplicate email error
+        let errorMessage = error.message;
+        if (error.code === '23505' || error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+          if (error.message.includes('email')) {
+            errorMessage = `A member with the email "${newMember.email}" already exists in the database. Please use a different email address.`;
+          } else {
+            errorMessage = `This record already exists in the database. ${error.message}`;
+          }
+        }
+        
+        alert(`Failed to save member to database:\n\n${errorMessage}\n\nCheck browser console for details.`);
         // Remove from local state if insert failed
         setMembers(prev => prev.filter(m => m.id !== newMember.id));
+        throw new Error(errorMessage); // Throw so the form can catch it
       } else {
         console.log('Member successfully saved to Supabase:', data);
       }

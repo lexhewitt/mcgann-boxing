@@ -7,6 +7,7 @@ import Input from '../ui/Input';
 import { Member, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import MemberFinancialSummary from './MemberFinancialSummary';
+import { getSupabase } from '../../services/supabaseClient';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -51,6 +52,26 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
         return;
     }
 
+    // Also check the database for duplicates (in case database has members not in local state)
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      try {
+        const { data: existingMember } = await supabaseClient
+          .from('members')
+          .select('email')
+          .eq('email', formData.email.toLowerCase())
+          .maybeSingle();
+        
+        if (existingMember) {
+          setError(`A member with the email "${formData.email}" already exists in the database. Please use a different email address.`);
+          return;
+        }
+      } catch (dbCheckError) {
+        console.warn('Could not check database for duplicate email:', dbCheckError);
+        // Continue with submission - the database will catch it if it's a duplicate
+      }
+    }
+
     try {
       await addMember({
       ...formData,
@@ -62,7 +83,9 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
     onClose();
     } catch (error) {
       console.error('Error adding member:', error);
-      setError('Failed to add member. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add member. Please try again.';
+      setError(errorMessage);
+      // Don't close the modal if there's an error, so user can fix it
     }
   };
 
