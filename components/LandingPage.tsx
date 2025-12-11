@@ -48,9 +48,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegisterClick }) => {
                     <p className="mt-4 max-w-2xl mx-auto text-lg text-gray-300">
                         Whether you're a beginner or a seasoned pro, our world-class coaches and community are here to help you achieve your goals.
                     </p>
-                    <Button onClick={onRegisterClick} className="mt-8 text-lg px-8 py-3">
-                        Join Now
-                    </Button>
+                    <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
+                        <Button 
+                            onClick={() => window.location.href = '/book'} 
+                            className="text-lg px-8 py-3"
+                        >
+                            Book a Class or Session
+                        </Button>
+                        <Button 
+                            onClick={onRegisterClick} 
+                            variant="secondary"
+                            className="text-lg px-8 py-3"
+                        >
+                            Join Now
+                        </Button>
+                    </div>
                 </div>
             </div>
             
@@ -87,9 +99,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegisterClick }) => {
                  <h2 className="text-3xl font-bold text-center mb-8 text-white">Meet Our Coaches</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                      {coaches.map(coach => (
-                         <CoachCard key={coach.id} coach={coach} />
+                         <CoachCard key={coach.id} coach={coach} showBookButton={true} />
                      ))}
                  </div>
+            </section>
+
+            {/* Book Now CTA Section */}
+            <section className="bg-brand-gray rounded-3xl p-12 text-center">
+                <h2 className="text-3xl font-bold text-white mb-4">Ready to Start Your Journey?</h2>
+                <p className="text-gray-300 mb-8 max-w-2xl mx-auto">
+                    Book a class or private session with one of our expert coaches. No membership required - pay as you go!
+                </p>
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <Button 
+                        onClick={() => window.location.href = '/book'} 
+                        className="text-lg px-8 py-3"
+                    >
+                        Book a Class or Session
+                    </Button>
+                    <Button 
+                        onClick={onRegisterClick} 
+                        variant="secondary"
+                        className="text-lg px-8 py-3"
+                    >
+                        Become a Member
+                    </Button>
+                </div>
             </section>
         </div>
     )

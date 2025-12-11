@@ -58,7 +58,13 @@ const ClassSchedule: React.FC<ClassScheduleProps> = ({ viewMode = 'weekly' }) =>
 
   const handleBookClick = (classId: string) => {
       if (!currentUser || currentUser.role !== UserRole.MEMBER) {
-          alert('Please login or register to book a class.');
+          // Redirect visitors to booking wizard with class pre-selected
+          const cls = classes.find(c => c.id === classId);
+          if (cls) {
+              window.location.href = `/book?coach=${cls.coachId}&class=${classId}`;
+          } else {
+              window.location.href = '/book';
+          }
           return;
       }
       setShowBookingModal(classId);

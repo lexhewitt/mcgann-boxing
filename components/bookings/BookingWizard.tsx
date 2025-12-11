@@ -4,6 +4,7 @@ import { CoachSlot, SlotType, GuestBooking, Coach } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { handleGuestCheckout, finalizeStripeCheckoutSession } from '../../services/stripeService';
+import { getNextDateForDay } from '../../utils/time';
 
 interface BookableItem {
   id: string;
@@ -212,15 +213,35 @@ const BookingWizard: React.FC = () => {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const coachParam = params.get('coach');
+    const classParam = params.get('class');
     
     if (coachParam) {
       const coach = coaches.find(c => c.id === coachParam);
       if (coach) {
         setSelectedCoach(coach);
         setStep(2); // Skip to service type selection
+        
+        // If a specific class is provided, pre-select it
+        if (classParam) {
+          const cls = classes.find(c => c.id === classParam && c.coachId === coachParam);
+          if (cls) {
+            setSelectedServiceType('CLASS');
+            // Find the next occurrence of this class
+            const nextDate = getNextDateForDay(cls.day);
+            const classItem = classItems.find(item => 
+              item.classId === cls.id && 
+              item.date >= nextDate
+            );
+            if (classItem) {
+              setSelectedItem(classItem);
+              setSelectedDate(classItem.date);
+              setStep(3); // Skip to date/time selection
+            }
+          }
+        }
       }
     }
-  }, [coaches]);
+  }, [coaches, classes, classItems]);
 
   useEffect(() => {
     const finalizeGuestFlow = async () => {
