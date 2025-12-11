@@ -14,8 +14,9 @@ import FinancialsDashboard from './FinancialsDashboard';
 import WhatsAppControlPanel from './WhatsAppControlPanel';
 import AvatarUpload from './AvatarUpload';
 import CoachProfileEditor from './CoachProfileEditor';
+import CoachSignupLink from './CoachSignupLink';
 
-type CoachTab = 'classes' | 'calendar' | 'availability' | 'notifications' | 'financials' | 'whatsapp';
+type CoachTab = 'classes' | 'calendar' | 'availability' | 'notifications' | 'financials' | 'whatsapp' | 'signup';
 
 interface CoachDashboardProps {
   coachToView?: Coach;
@@ -202,6 +203,7 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                 <TabButton tabName="financials" label="Financials" />
                 <TabButton tabName="notifications" label="Notifications" count={pendingNotificationsCount} />
                 <TabButton tabName="whatsapp" label="WhatsApp" />
+                <TabButton tabName="signup" label="Signup Link" />
             </div>
             <div className="bg-brand-gray p-6 rounded-b-lg -mt-8">
                 {renderContent()}
