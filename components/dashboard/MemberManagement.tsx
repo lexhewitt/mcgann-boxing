@@ -284,12 +284,13 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
 
 
 const MemberManagement: React.FC = () => {
-  const { members, deleteMember, bookings, classes, familyMembers, transactions } = useData();
+  const { members, deleteMember, bookings, classes, familyMembers, transactions, refreshData } = useData();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [memberToViewFinancials, setMemberToViewFinancials] = useState<Member | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -337,7 +338,20 @@ const MemberManagement: React.FC = () => {
       <div className="overflow-x-auto">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-white">Members ({filteredMembers.length})</h3>
-          <Button onClick={() => setIsAddModalOpen(true)}>Add New Member</Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="secondary" 
+              onClick={async () => {
+                setIsRefreshing(true);
+                await refreshData();
+                setIsRefreshing(false);
+              }}
+              disabled={isRefreshing}
+            >
+              {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh from Database'}
+            </Button>
+            <Button onClick={() => setIsAddModalOpen(true)}>Add New Member</Button>
+          </div>
         </div>
         <div className="mb-4">
           <Input 
