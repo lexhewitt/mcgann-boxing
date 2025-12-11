@@ -11,7 +11,7 @@ import GymAccess from './GymAccess';
 import MemberFinancialSummary from './MemberFinancialSummary';
 
 const HealthAndSafetyNotice: React.FC = () => (
-    <div className="bg-yellow-900/20 border-l-4 border-yellow-500 text-yellow-300 p-4 rounded-lg my-8 lg:col-span-3">
+    <div className="bg-yellow-900/20 border-l-4 border-yellow-500 text-yellow-300 p-4 rounded-lg">
       <div className="flex">
         <div className="py-1">
           <svg className="fill-current h-6 w-6 text-yellow-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
@@ -30,7 +30,6 @@ const HealthAndSafetyNotice: React.FC = () => (
       </div>
     </div>
 );
-
 
 const MemberDashboard: React.FC = () => {
     const { currentUser, updateCurrentUser } = useAuth();
@@ -106,22 +105,47 @@ const MemberDashboard: React.FC = () => {
     };
 
     return (
-        <div className="space-y-8">
-        <MemberFinancialSummary
-            member={currentUser as Member}
-            transactions={transactions}
-            embedded
-        />
-        <HealthAndSafetyNotice />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-8">
-                <MemberBookingHub />
-                <div>
-                    <h2 className="text-2xl font-semibold text-white mb-4">My Upcoming Bookings</h2>
-                    <div className="bg-brand-gray p-4 rounded-lg">
-                        {memberBookings.length > 0 ? (
-                            <ul className="space-y-2">
-                                {memberBookings.map(booking => {
+        <div className="space-y-6">
+            {/* Header Section */}
+            <div className="bg-brand-gray p-6 rounded-3xl">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white">{currentUser.name}</h1>
+                        <p className="text-gray-400 mt-1">{currentUser.email}</p>
+                        <div className="mt-2 text-sm text-gray-300">
+                            {getMembershipDisplay()}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Financial Summary Section */}
+            <div className="bg-brand-gray p-6 rounded-3xl">
+                <MemberFinancialSummary
+                    member={currentUser as Member}
+                    transactions={transactions}
+                    embedded
+                />
+            </div>
+
+            {/* Health & Safety Notice */}
+            <HealthAndSafetyNotice />
+
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Left Column - Bookings & Activities */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Book a Class Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <MemberBookingHub />
+                    </div>
+
+                    {/* Upcoming Bookings Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <h2 className="text-2xl font-semibold text-white mb-4">Upcoming Bookings</h2>
+                        <div className="space-y-3">
+                            {memberBookings.length > 0 ? (
+                                memberBookings.map(booking => {
                                     const cls = classes.find(c => c.id === booking.classId);
                                     const participant = allParticipants.find(p => p.id === booking.participantId);
                                     const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
@@ -142,168 +166,279 @@ const MemberDashboard: React.FC = () => {
                                                 : 'bg-green-600';
                                     const showCancel = booking.paid && confirmationStatus !== 'CANCELED' && canCancelBooking(booking.sessionStart);
                                     return (
-                                        <li key={booking.id} className="flex flex-col gap-2 bg-brand-dark p-3 rounded md:flex-row md:items-center md:justify-between">
-                                            <div>
-                                                <p className="font-bold">{cls?.name}</p>
-                                                <p className="text-sm text-gray-400">
-                                                    {cls?.day} at {cls?.time} {booking.participantId !== currentUser.id && `(for ${participant?.name})`}
-                                                </p>
+                                        <div key={booking.id} className="bg-brand-dark p-4 rounded-xl border border-gray-700 hover:border-gray-600 transition">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <h3 className="font-bold text-white text-lg">{cls?.name}</h3>
+                                                    <p className="text-sm text-gray-400 mt-1">
+                                                        {cls?.day} at {cls?.time}
+                                                        {booking.participantId !== currentUser.id && ` · For ${participant?.name}`}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className={`px-3 py-1 text-xs font-bold rounded ${statusClass}`}>
+                                                        {statusLabel}
+                                                    </span>
+                                                    {showCancel && (
+                                                        <Button 
+                                                            variant="secondary" 
+                                                            className="text-xs py-1.5 px-3" 
+                                                            onClick={() => handleCancelClassBooking(booking.id)}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className={`px-2 py-1 text-xs font-bold rounded ${statusClass}`}>{statusLabel}</span>
-                                                {showCancel && (
-                                                    <Button variant="secondary" className="text-xs py-1 px-3" onClick={() => handleCancelClassBooking(booking.id)}>
-                                                        Cancel Booking
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </li>
+                                        </div>
                                     );
-                                })}
-                            </ul>
-                        ) : (
-                            <p className="text-gray-400">You have no upcoming classes booked.</p>
-                        )}
+                                })
+                            ) : (
+                                <div className="bg-brand-dark p-6 rounded-xl text-center border border-gray-700">
+                                    <p className="text-gray-400">No upcoming classes booked.</p>
+                                    <p className="text-sm text-gray-500 mt-2">Book a class using the booking hub above.</p>
+                                </div>
+                            )}
+                        </div>
                     </div>
-                </div>
-                <div>
-                    <h2 className="text-2xl font-semibold text-white mb-4">Booking History</h2>
-                    <div className="bg-brand-gray p-4 rounded-lg">
-                        {paymentHistory.length > 0 ? (
-                            <ul className="space-y-2">
-                                {paymentHistory.map(booking => {
-                                    const cls = classes.find(c => c.id === booking.classId);
-                                    const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
-                                    const confirmationStatus = bookingTransaction?.confirmationStatus === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed';
-                                    return (
-                                        <li key={booking.id} className="flex justify-between items-center bg-brand-dark p-3 rounded">
-                                            <div>
-                                                <p className="font-bold">{cls?.name}</p>
-                                                <p className="text-sm text-gray-400">
-                                                    Paid on: {new Date(booking.bookingDate).toLocaleDateString()}
-                                                </p>
-                                                <p className="text-xs text-gray-500">{confirmationStatus}</p>
-                                            </div>
-                                            <span className="font-semibold text-green-400">
-                                                £{cls?.price?.toFixed(2) || 'N/A'}
-                                            </span>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        ) : (
-                            <p className="text-gray-400">You have no payment history.</p>
-                        )}
-                    </div>
-                </div>
-                {upcomingPrivateSessions.length > 0 && (
-                    <div>
-                        <h2 className="text-2xl font-semibold text-white mb-4">My Private Sessions</h2>
-                        <div className="bg-brand-gray p-4 rounded-lg">
-                            <ul className="space-y-2">
+
+                    {/* Private Sessions Section */}
+                    {upcomingPrivateSessions.length > 0 && (
+                        <div className="bg-brand-gray p-6 rounded-3xl">
+                            <h2 className="text-2xl font-semibold text-white mb-4">Private Sessions</h2>
+                            <div className="space-y-3">
                                 {upcomingPrivateSessions.map(({ appt, slot }) => {
                                     if (!slot) return null;
                                     const coach = coaches.find(c => c.id === slot.coachId);
                                     const canCancel = new Date(slot.start).getTime() - Date.now() >= cancellationWindowMs;
                                     return (
-                                        <li key={appt.id} className="flex flex-col gap-2 bg-brand-dark p-3 rounded md:flex-row md:items-center md:justify-between">
-                                            <div>
-                                                <p className="font-bold">{slot.title}</p>
-                                                <p className="text-sm text-gray-400">
-                                                    {new Date(slot.start).toLocaleString()} with {coach?.name ?? 'Coach'}
-                                                </p>
+                                        <div key={appt.id} className="bg-brand-dark p-4 rounded-xl border border-gray-700 hover:border-gray-600 transition">
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <h3 className="font-bold text-white text-lg">{slot.title}</h3>
+                                                    <p className="text-sm text-gray-400 mt-1">
+                                                        {new Date(slot.start).toLocaleString()} with {coach?.name ?? 'Coach'}
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="px-3 py-1 text-xs font-bold rounded bg-yellow-600 text-black">
+                                                        Awaiting confirmation
+                                                    </span>
+                                                    {canCancel && (
+                                                        <Button 
+                                                            variant="secondary" 
+                                                            className="text-xs py-1.5 px-3" 
+                                                            onClick={() => handleCancelSession(appt.id)}
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
-                        <div className="flex items-center gap-2">
-                                                <span className="px-2 py-1 text-xs font-bold rounded bg-yellow-600 text-black">
-                                                    Awaiting confirmation
-                                                </span>
-                                                {canCancel && (
-                                                    <Button variant="secondary" className="text-xs py-1 px-3" onClick={() => handleCancelSession(appt.id)}>
-                                                        Cancel Booking
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </li>
+                                        </div>
                                     );
                                 })}
-                            </ul>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className="space-y-6">
-                <div className="bg-brand-gray p-6 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-semibold text-white">My Profile</h2>
-                        <Button onClick={() => setIsEditing(!isEditing)} variant="secondary">{isEditing ? 'Cancel' : 'Edit'}</Button>
-                    </div>
-                    {isEditing ? (
-                        <form onSubmit={handleSave} className="space-y-4">
-                            <input name="name" value={formData.name} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded" />
-                            <label className="text-sm text-gray-400">Date of Birth</label>
-                            <input name="dob" type="date" value={formData.dob} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded" />
-                            <select name="sex" value={formData.sex} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded">
-                                <option value="M">Male</option>
-                                <option value="F">Female</option>
-                            </select>
-                            <select name="ability" value={formData.ability} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded">
-                                <option>Beginner</option>
-                                <option>Intermediate</option>
-                                <option>Advanced</option>
-                                <option>Competitive</option>
-                            </select>
-                            <textarea name="bio" value={formData.bio} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded" rows={3}></textarea>
-                            <select name="coachId" value={formData.coachId || ''} onChange={handleInputChange} className="w-full bg-brand-dark p-2 rounded">
-                                <option value="">Select a coach</option>
-                                {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                            <Button type="submit">Save Changes</Button>
-                        </form>
-                    ) : (
-                        <div className="space-y-3 text-gray-300">
-                            <p><strong>Email:</strong> {currentUser.email}</p>
-                            {getMembershipDisplay()}
-                            <p><strong>Age:</strong> {calculateAge(currentUser.dob)}</p>
-                            <p><strong>Sex:</strong> {currentUser.sex}</p>
-                            <p><strong>Ability:</strong> {currentUser.ability}</p>
-                             {currentUser.isCarded && <p><strong>Status:</strong> <span className="font-bold text-brand-red">Carded Boxer</span></p>}
-                            <p><strong>Bio:</strong> {currentUser.bio}</p>
-                            <p><strong>Coach:</strong> {coaches.find(c=>c.id === currentUser.coachId)?.name || 'None selected'}</p>
+                            </div>
                         </div>
                     )}
+
+                    {/* Booking History Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <h2 className="text-2xl font-semibold text-white mb-4">Booking History</h2>
+                        <div className="space-y-3">
+                            {paymentHistory.length > 0 ? (
+                                paymentHistory.map(booking => {
+                                    const cls = classes.find(c => c.id === booking.classId);
+                                    const bookingTransaction = memberTransactions.find(tx => tx.bookingId === booking.id);
+                                    const confirmationStatus = bookingTransaction?.confirmationStatus === 'PENDING' ? 'Awaiting confirmation' : 'Confirmed';
+                                    return (
+                                        <div key={booking.id} className="bg-brand-dark p-4 rounded-xl border border-gray-700">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <h3 className="font-semibold text-white">{cls?.name}</h3>
+                                                    <p className="text-sm text-gray-400 mt-1">
+                                                        Paid on {new Date(booking.bookingDate).toLocaleDateString()}
+                                                    </p>
+                                                    <p className="text-xs text-gray-500 mt-1">{confirmationStatus}</p>
+                                                </div>
+                                                <span className="font-semibold text-green-400 text-lg">
+                                                    £{cls?.price?.toFixed(2) || 'N/A'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="bg-brand-dark p-6 rounded-xl text-center border border-gray-700">
+                                    <p className="text-gray-400">No booking history yet.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
-                <GymAccess />
-
-                <div className="bg-brand-gray p-6 rounded-lg">
-                    <div className="flex justify-between items-center mb-4">
-                        <h2 className="text-2xl font-semibold text-white">Family Members</h2>
-                        <Button onClick={() => setAddFamilyMemberOpen(true)}>Add Child</Button>
-                    </div>
-                    <div className="space-y-3">
-                        {memberFamily.length > 0 ? (
-                            memberFamily.map(child => (
-                                <div key={child.id} className="flex justify-between items-center bg-brand-dark p-3 rounded">
-                                    <div>
-                                        <p className="font-semibold">{child.name}</p>
-                                        <p className="text-sm text-gray-400">Age: {calculateAge(child.dob)}</p>
-                                    </div>
-                                    <Button variant="danger" className="text-xs py-1 px-2" onClick={() => window.confirm(`Remove ${child.name}?`) && deleteFamilyMember(child.id)}>Remove</Button>
+                {/* Right Column - Profile & Settings */}
+                <div className="space-y-6">
+                    {/* Profile Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-semibold text-white">My Profile</h2>
+                            <Button onClick={() => setIsEditing(!isEditing)} variant="secondary" className="text-sm">
+                                {isEditing ? 'Cancel' : 'Edit'}
+                            </Button>
+                        </div>
+                        {isEditing ? (
+                            <form onSubmit={handleSave} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Name</label>
+                                    <input 
+                                        name="name" 
+                                        value={formData.name} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white" 
+                                    />
                                 </div>
-                            ))
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Date of Birth</label>
+                                    <input 
+                                        name="dob" 
+                                        type="date" 
+                                        value={formData.dob} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white" 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Sex</label>
+                                    <select 
+                                        name="sex" 
+                                        value={formData.sex} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white"
+                                    >
+                                        <option value="M">Male</option>
+                                        <option value="F">Female</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Ability Level</label>
+                                    <select 
+                                        name="ability" 
+                                        value={formData.ability} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white"
+                                    >
+                                        <option>Beginner</option>
+                                        <option>Intermediate</option>
+                                        <option>Advanced</option>
+                                        <option>Competitive</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Bio</label>
+                                    <textarea 
+                                        name="bio" 
+                                        value={formData.bio} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white" 
+                                        rows={3}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-1">Coach</label>
+                                    <select 
+                                        name="coachId" 
+                                        value={formData.coachId || ''} 
+                                        onChange={handleInputChange} 
+                                        className="w-full bg-brand-dark p-2 rounded text-white"
+                                    >
+                                        <option value="">Select a coach</option>
+                                        {coaches.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    </select>
+                                </div>
+                                <Button type="submit" className="w-full">Save Changes</Button>
+                            </form>
                         ) : (
-                            <p className="text-gray-400">No family members added yet. Add children to book them into kids classes.</p>
+                            <div className="space-y-3 text-gray-300">
+                                <div className="grid grid-cols-1 gap-3">
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Email</p>
+                                        <p className="text-white">{currentUser.email}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Age</p>
+                                        <p className="text-white">{calculateAge(currentUser.dob)}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Sex</p>
+                                        <p className="text-white">{currentUser.sex}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Ability</p>
+                                        <p className="text-white">{currentUser.ability}</p>
+                                    </div>
+                                    {currentUser.isCarded && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Status</p>
+                                            <p className="text-brand-red font-bold">Carded Boxer</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Bio</p>
+                                        <p className="text-white">{currentUser.bio || 'No bio provided'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Coach</p>
+                                        <p className="text-white">{coaches.find(c=>c.id === currentUser.coachId)?.name || 'None selected'}</p>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
-                </div>
 
+                    {/* Gym Access Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <GymAccess />
+                    </div>
+
+                    {/* Family Members Section */}
+                    <div className="bg-brand-gray p-6 rounded-3xl">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-semibold text-white">Family Members</h2>
+                            <Button onClick={() => setAddFamilyMemberOpen(true)} className="text-sm">Add Child</Button>
+                        </div>
+                        <div className="space-y-3">
+                            {memberFamily.length > 0 ? (
+                                memberFamily.map(child => (
+                                    <div key={child.id} className="bg-brand-dark p-4 rounded-xl border border-gray-700 flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold text-white">{child.name}</p>
+                                            <p className="text-sm text-gray-400">Age: {calculateAge(child.dob)}</p>
+                                        </div>
+                                        <Button 
+                                            variant="danger" 
+                                            className="text-xs py-1.5 px-3" 
+                                            onClick={() => window.confirm(`Remove ${child.name}?`) && deleteFamilyMember(child.id)}
+                                        >
+                                            Remove
+                                        </Button>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="bg-brand-dark p-6 rounded-xl text-center border border-gray-700">
+                                    <p className="text-gray-400 text-sm">No family members added yet.</p>
+                                    <p className="text-xs text-gray-500 mt-2">Add children to book them into kids classes.</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
-        <AddFamilyMemberModal 
-            isOpen={isAddFamilyMemberOpen} 
-            onClose={() => setAddFamilyMemberOpen(false)} 
-        />
+
+            <AddFamilyMemberModal 
+                isOpen={isAddFamilyMemberOpen} 
+                onClose={() => setAddFamilyMemberOpen(false)} 
+            />
         </div>
     );
 };

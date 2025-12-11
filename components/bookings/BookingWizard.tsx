@@ -65,8 +65,7 @@ const BookingWizard: React.FC = () => {
   const [step, setStep] = useState(1);
   const [isProcessing, setProcessing] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-
-  const monthAnchor = useMemo(() => new Date(), []);
+  const [monthAnchor, setMonthAnchor] = useState<Date>(new Date());
   const startOfToday = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -79,9 +78,21 @@ const BookingWizard: React.FC = () => {
     const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
     const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
 
+    // Debug logging
+    console.log('[BookingWizard] Filtering classes:', {
+      totalClasses: classes.length,
+      selectedCoachId: selectedCoach?.id,
+      selectedCoachName: selectedCoach?.name,
+      monthStart: monthStart.toISOString(),
+      monthEnd: monthEnd.toISOString(),
+    });
+
     classes.forEach(cls => {
       // Filter by selected coach if one is selected
-      if (selectedCoach && cls.coachId !== selectedCoach.id) return;
+      if (selectedCoach && cls.coachId !== selectedCoach.id) {
+        console.log(`[BookingWizard] Skipping class ${cls.name} - coach mismatch: ${cls.coachId} !== ${selectedCoach.id}`);
+        return;
+      }
       
       const coach = coaches.find(c => c.id === cls.coachId);
       let iterator = new Date(monthStart);
@@ -108,22 +119,59 @@ const BookingWizard: React.FC = () => {
         iterator.setDate(iterator.getDate() + 1);
       }
     });
+    
+    console.log(`[BookingWizard] Found ${occurrences.length} class occurrences for month`);
     return occurrences;
   }, [classes, coaches, monthAnchor, startOfToday, selectedCoach]);
 
   const slotItems = useMemo(() => {
     const now = new Date();
-    return coachSlots
+    const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
+    const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
+    
+    // Debug logging
+    console.log('[BookingWizard] Filtering slots:', {
+      totalSlots: coachSlots.length,
+      selectedCoachId: selectedCoach?.id,
+      selectedServiceType,
+      monthStart: monthStart.toISOString(),
+      monthEnd: monthEnd.toISOString(),
+    });
+
+    const filtered = coachSlots
       .filter(slot => {
         // Filter by selected coach
-        if (selectedCoach && slot.coachId !== selectedCoach.id) return false;
+        if (selectedCoach && slot.coachId !== selectedCoach.id) {
+          console.log(`[BookingWizard] Skipping slot ${slot.title} - coach mismatch: ${slot.coachId} !== ${selectedCoach.id}`);
+          return false;
+        }
         // Filter by service type
-        if (selectedServiceType === 'PRIVATE' && slot.type !== SlotType.PRIVATE) return false;
-        if (selectedServiceType === 'GROUP' && slot.type !== SlotType.GROUP) return false;
+        if (selectedServiceType === 'PRIVATE' && slot.type !== SlotType.PRIVATE) {
+          console.log(`[BookingWizard] Skipping slot ${slot.title} - type mismatch: ${slot.type} !== PRIVATE`);
+          return false;
+        }
+        if (selectedServiceType === 'GROUP' && slot.type !== SlotType.GROUP) {
+          console.log(`[BookingWizard] Skipping slot ${slot.title} - type mismatch: ${slot.type} !== GROUP`);
+          return false;
+        }
         return true;
       })
-      .filter(slot => new Date(slot.start).getMonth() === monthAnchor.getMonth())
-      .filter(slot => new Date(slot.start) >= now)
+      .filter(slot => {
+        const slotDate = new Date(slot.start);
+        const inMonth = slotDate >= monthStart && slotDate <= monthEnd;
+        if (!inMonth) {
+          console.log(`[BookingWizard] Skipping slot ${slot.title} - outside month: ${slotDate.toISOString()}`);
+        }
+        return inMonth;
+      })
+      .filter(slot => {
+        const slotDate = new Date(slot.start);
+        const isFuture = slotDate >= now;
+        if (!isFuture) {
+          console.log(`[BookingWizard] Skipping slot ${slot.title} - in past: ${slotDate.toISOString()}`);
+        }
+        return isFuture;
+      })
       .map(slot => {
         const coach = coaches.find(c => c.id === slot.coachId);
         return {
@@ -138,6 +186,9 @@ const BookingWizard: React.FC = () => {
           slotId: slot.id,
         } as BookableItem;
       });
+    
+    console.log(`[BookingWizard] Found ${filtered.length} slots for month`);
+    return filtered;
   }, [coachSlots, coaches, monthAnchor, selectedCoach, selectedServiceType]);
 
   const availableItems = useMemo(() => {
@@ -477,6 +528,35 @@ const BookingWizard: React.FC = () => {
                   <p className="text-sm text-gray-400">Select a date</p>
                   <h3 className="text-white text-xl font-semibold">{monthAnchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</h3>
                 </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const newMonth = new Date(monthAnchor);
+                      newMonth.setMonth(newMonth.getMonth() - 1);
+                      setMonthAnchor(newMonth);
+                    }}
+                    className="px-3 py-1 rounded-lg bg-black/30 text-white hover:bg-black/50"
+                  >
+                    ←
+                  </button>
+                  <button
+                    onClick={() => setMonthAnchor(new Date())}
+                    className="px-3 py-1 rounded-lg bg-black/30 text-white hover:bg-black/50 text-xs"
+                    title="Go to current month"
+                  >
+                    Today
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newMonth = new Date(monthAnchor);
+                      newMonth.setMonth(newMonth.getMonth() + 1);
+                      setMonthAnchor(newMonth);
+                    }}
+                    className="px-3 py-1 rounded-lg bg-black/30 text-white hover:bg-black/50"
+                  >
+                    →
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-7 gap-2 text-sm text-gray-400 uppercase mb-2">
                 {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(label => (
@@ -541,7 +621,21 @@ const BookingWizard: React.FC = () => {
                   )}
                 </>
               ) : (
-                <div className="text-gray-400 text-center mt-20">Please select a date to view times.</div>
+                <div className="text-gray-400 text-center mt-20">
+                  <p>Please select a date to view times.</p>
+                  {availableItems.length === 0 && (
+                    <div className="mt-4 p-4 bg-yellow-900/20 border border-yellow-700 rounded-lg text-sm">
+                      <p className="font-semibold text-yellow-300 mb-2">No available {selectedServiceType === 'CLASS' ? 'classes' : 'sessions'} found for {selectedCoach.name}.</p>
+                      <p className="text-yellow-400">This could mean:</p>
+                      <ul className="list-disc list-inside mt-2 space-y-1 text-yellow-400">
+                        <li>No {selectedServiceType === 'CLASS' ? 'classes' : 'sessions'} have been created for this coach</li>
+                        <li>All {selectedServiceType === 'CLASS' ? 'classes' : 'sessions'} are in a different month</li>
+                        <li>Try selecting a different month using the arrows above</li>
+                      </ul>
+                      <p className="mt-2 text-xs text-yellow-500">Found {availableItems.length} total items for this month.</p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
