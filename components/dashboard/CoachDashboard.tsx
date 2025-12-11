@@ -144,6 +144,10 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                         onUpdateCoach={updateCoach}
                     />
                 );
+            case 'signup':
+                return (
+                    <CoachSignupLink coach={coachForDashboard as Coach} />
+                );
             default:
                 return null;
         }
