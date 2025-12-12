@@ -51,14 +51,20 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
 
         if (!gymClass || !requestingCoach || !targetCoach || !user) return null;
         const isPendingForUser = notification.status === NotificationStatus.PENDING &&
-          (user.role === UserRole.ADMIN || notification.targetCoachId === user.id);
+          (user.role === UserRole.ADMIN || notification.targetCoachId === user.id || notification.requestingCoachId === user.id);
 
         let message = '';
-        if (user.role === UserRole.ADMIN && user.id !== requestingCoach.id && user.id !== targetCoach.id) {
-            // Admin view
-            message = `${requestingCoach.name} requested ${targetCoach.name} to cover "${gymClass.name}".`;
+        if (user.role === UserRole.ADMIN) {
+            // Admin view - can see all requests and accept them
+            if (notification.targetCoachId === user.id) {
+                message = `${requestingCoach.name} has requested you to cover their class: "${gymClass.name}".`;
+            } else if (notification.requestingCoachId === user.id) {
+                message = `You requested ${targetCoach.name} to cover your class: "${gymClass.name}".`;
+            } else {
+                message = `${requestingCoach.name} requested ${targetCoach.name} to cover "${gymClass.name}".`;
+            }
         } else if (notification.targetCoachId === user.id) {
-            // Incoming request
+            // Incoming request for target coach
             message = `${requestingCoach.name} has requested you to cover their class: "${gymClass.name}".`;
         } else {
             // Outgoing request
@@ -81,7 +87,7 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ user }) => {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                         <StatusBadge status={notification.status} />
-                        {notification.targetCoachId === user.id && notification.status === NotificationStatus.PENDING && (
+                        {(notification.targetCoachId === user.id || user.role === UserRole.ADMIN) && notification.status === NotificationStatus.PENDING && (
                             <Button onClick={() => handleAccept(notification.id)} className="text-xs py-1 px-2">Accept</Button>
                         )}
                         {notification.requestingCoachId === user.id && notification.status === NotificationStatus.PENDING && (

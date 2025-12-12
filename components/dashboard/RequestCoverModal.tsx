@@ -63,7 +63,7 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
                 
                 <div>
                     <label htmlFor="coach-select" className="block text-sm font-medium text-gray-300 mb-1">
-                        Select an available coach
+                        Select a coach to request cover from
                     </label>
                     <select
                         id="coach-select"
@@ -81,9 +81,12 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
                     </select>
                     {availableCoaches.length === 0 && (
                         <p className="text-sm text-yellow-400 mt-2">
-                            No other coaches are available at this time.
+                            No other coaches are available at this time. You can still request cover - Sean (Admin) will be notified.
                         </p>
                     )}
+                    <p className="text-xs text-gray-400 mt-2">
+                        💡 Sean (Admin) will also be notified and can accept the request.
+                    </p>
                 </div>
                 
                 <div>

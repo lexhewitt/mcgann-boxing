@@ -709,7 +709,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     
     const gymClass = classes.find(c => c.id === notification.classId);
     const originalCoach = coaches.find(c => c.id === notification.requestingCoachId);
-    if (!gymClass || !originalCoach) return;
+    const targetCoach = coaches.find(c => c.id === notification.targetCoachId);
+    if (!gymClass || !originalCoach || !targetCoach) return;
+    
+    // Allow admin or target coach to accept
+    if (actor.role !== 'ADMIN' && actor.id !== notification.targetCoachId) {
+      console.warn('Only admin or target coach can accept cover requests');
+      return;
+    }
     
     // Update class with new coach and store original coach
     setClasses(prev => prev.map(c => 
@@ -723,11 +730,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       n.id === notificationId ? { ...n, status: NotificationStatus.ACCEPTED } : n
     ));
     
+    const acceptedBy = actor.role === 'ADMIN' ? `${actor.name} (Admin)` : actor.name;
     addAuditLog({
       timestamp: new Date().toISOString(),
       actorId: actor.id,
       action: 'CLASS_TRANSFER_ACCEPTED',
-      details: `${actor.name} accepted the request to cover "${gymClass.name}" for ${originalCoach.name}.`,
+      details: `${acceptedBy} accepted the request for ${targetCoach.name} to cover "${gymClass.name}" for ${originalCoach.name}.`,
     });
   };
 
