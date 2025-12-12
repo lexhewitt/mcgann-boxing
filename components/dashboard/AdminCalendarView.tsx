@@ -99,7 +99,7 @@ const AdminCalendarView: React.FC = () => {
   // Day view
   const renderDayView = () => {
     const events = getEventsForDate(currentDate);
-    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const hours = Array.from({ length: 18 }, (_, i) => i + 6); // Start from 06:00, 18 hours total (06:00-23:00)
 
     return (
       <div className="bg-brand-dark rounded-lg p-4">
@@ -137,7 +137,8 @@ const AdminCalendarView: React.FC = () => {
               ))}
               
               {events.map(event => {
-                const top = (event.startTime / 60) * 64;
+                // Adjust for 06:00 start: subtract 6 hours (360 minutes) worth of pixels
+                const top = ((event.startTime - 360) / 60) * 64; // 64px per hour, offset by 6 hours
                 const height = ((event.endTime - event.startTime) / 60) * 64;
                 
                 return (
@@ -184,7 +185,7 @@ const AdminCalendarView: React.FC = () => {
       return date;
     });
 
-    const hours = Array.from({ length: 24 }, (_, i) => i);
+    const hours = Array.from({ length: 18 }, (_, i) => i + 6); // Start from 06:00, 18 hours total (06:00-23:00)
 
     return (
       <div className="bg-brand-dark rounded-lg p-4">
@@ -242,7 +243,8 @@ const AdminCalendarView: React.FC = () => {
                     ))}
 
                     {events.map(event => {
-                      const top = (event.startTime / 60) * 48;
+                      // Adjust for 06:00 start: subtract 6 hours (360 minutes) worth of pixels
+                      const top = ((event.startTime - 360) / 60) * 48; // 48px per hour, offset by 6 hours
                       const height = ((event.endTime - event.startTime) / 60) * 48;
                       
                       return (
@@ -443,4 +445,5 @@ const AdminCalendarView: React.FC = () => {
 };
 
 export default AdminCalendarView;
+
 
