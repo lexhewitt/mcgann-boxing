@@ -137,7 +137,8 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
                         {isClassFull ? 'Class Full' : 'Add Member'}
                     </Button>
                 )}
-                 {currentUser?.role !== UserRole.MEMBER && !gymClass.originalCoachId && currentUser?.id === gymClass.coachId && (
+                 {currentUser?.role !== UserRole.MEMBER && !gymClass.originalCoachId && 
+                  (currentUser?.id === gymClass.coachId || (gymClass.coachIds && gymClass.coachIds.includes(currentUser?.id || ''))) && (
                      <Button variant="secondary" onClick={() => setIsRequestingCover(true)}>Request Cover</Button>
                  )}
                  {gymClass.originalCoachId && (currentUser?.id === gymClass.originalCoachId || currentUser?.role === UserRole.ADMIN) && (
