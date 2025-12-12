@@ -149,13 +149,18 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
                 const top = (event.startTime / 60) * 64; // 64px per hour
                 const height = ((event.endTime - event.startTime) / 60) * 64;
                 
+                // For private sessions, use different styling for available vs booked
+                const isAvailablePrivate = event.type === 'private' && !event.booked;
+                
                 return (
                   <div
                     key={event.id}
                     className={`absolute left-0 right-0 rounded-lg p-2 cursor-pointer hover:opacity-90 transition-opacity ${
                       event.type === 'class' 
                         ? 'bg-blue-600 border-l-4 border-blue-400' 
-                        : 'bg-purple-600 border-l-4 border-purple-400'
+                        : isAvailablePrivate
+                        ? 'bg-purple-500 border-l-4 border-purple-300 shadow-lg shadow-purple-500/50' // Available: brighter purple with glow
+                        : 'bg-purple-700 border-l-4 border-purple-500' // Booked: darker purple
                     }`}
                     style={{ top: `${top}px`, height: `${Math.max(height, 40)}px` }}
                     onClick={() => event.type === 'class' && setSelectedClass(event.data)}
@@ -168,8 +173,8 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
                       </div>
                     )}
                     {event.type === 'private' && (
-                      <div className="text-xs text-white/70 mt-1">
-                        {event.booked ? `👤 ${event.participant}` : 'Available'}
+                      <div className={`text-xs mt-1 font-semibold ${isAvailablePrivate ? 'text-white' : 'text-white/70'}`}>
+                        {event.booked ? `👤 ${event.participant}` : '✓ Available'}
                       </div>
                     )}
                   </div>
@@ -296,13 +301,18 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
                       const top = (event.startTime / 60) * 48; // 48px per hour
                       const height = ((event.endTime - event.startTime) / 60) * 48;
                       
+                      // For private sessions, use different styling for available vs booked
+                      const isAvailablePrivate = event.type === 'private' && !event.booked;
+                      
                       return (
                         <div
                           key={event.id}
                           className={`absolute left-1 right-1 rounded p-1.5 cursor-pointer hover:opacity-90 transition-opacity text-xs ${
                             event.type === 'class' 
                               ? 'bg-blue-600 border-l-2 border-blue-400' 
-                              : 'bg-purple-600 border-l-2 border-purple-400'
+                              : isAvailablePrivate
+                              ? 'bg-purple-500 border-l-2 border-purple-300 shadow-md shadow-purple-500/50' // Available: brighter purple with glow
+                              : 'bg-purple-700 border-l-2 border-purple-500' // Booked: darker purple
                           }`}
                           style={{ top: `${top}px`, height: `${Math.max(height, 32)}px` }}
                           onClick={() => event.type === 'class' && setSelectedClass(event.data)}
@@ -313,7 +323,9 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
                             <div className="text-white/70 text-[10px]">{event.bookings}/{event.capacity}</div>
                           )}
                           {event.type === 'private' && (
-                            <div className="text-white/70 text-[10px]">{event.booked ? '👤' : '○'}</div>
+                            <div className={`text-[10px] font-semibold ${isAvailablePrivate ? 'text-white' : 'text-white/70'}`}>
+                              {event.booked ? '👤' : '✓'}
+                            </div>
                           )}
                         </div>
                       );
@@ -402,8 +414,8 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
                     </div>
                   )}
                   {events.slots > 0 && (
-                    <div className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded">
-                      {events.slots} {events.slots === 1 ? 'Session' : 'Sessions'}
+                    <div className="bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded shadow shadow-purple-500/50">
+                      {events.slots} {events.slots === 1 ? 'Private Session' : 'Private Sessions'}
                     </div>
                   )}
                 </div>
@@ -532,8 +544,12 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
           <span className="text-gray-300">Classes</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-purple-600 rounded"></div>
-          <span className="text-gray-300">Private Sessions</span>
+          <div className="w-4 h-4 bg-purple-500 rounded shadow shadow-purple-500/50"></div>
+          <span className="text-gray-300">Available Private Sessions</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-purple-700 rounded"></div>
+          <span className="text-gray-300">Booked Private Sessions</span>
         </div>
       </div>
 
