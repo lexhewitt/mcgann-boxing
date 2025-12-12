@@ -1121,28 +1121,24 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return;
       }
 
-      // Insert multiple coaches if provided
+      // Always insert the primary coach into the junction table
+      // If coachIds array is provided, include those coaches too (avoiding duplicates)
+      const coachesToInsert = new Set<string>();
+      coachesToInsert.add(newClass.coachId); // Always include primary coach
+      
       if (newClass.coachIds && newClass.coachIds.length > 0) {
-        const coachInserts = newClass.coachIds.map(coachId => ({
-          id: `cc_${newClass.id}_${coachId}`,
-          class_id: newClass.id,
-          coach_id: coachId,
-        }));
-        
-        const { error: coachesError } = await supabaseClient.from('class_coaches').insert(coachInserts);
-        if (coachesError) {
-          console.error('Supabase: insert class coaches failed', coachesError.message);
-        }
-      } else {
-        // If no coachIds array, create a single junction record for the primary coach
-        const { error: coachError } = await supabaseClient.from('class_coaches').insert({
-          id: `cc_${newClass.id}_${newClass.coachId}`,
-          class_id: newClass.id,
-          coach_id: newClass.coachId,
-        });
-        if (coachError) {
-          console.error('Supabase: insert class coach failed', coachError.message);
-        }
+        newClass.coachIds.forEach(coachId => coachesToInsert.add(coachId));
+      }
+      
+      const coachInserts = Array.from(coachesToInsert).map(coachId => ({
+        id: `cc_${newClass.id}_${coachId}`,
+        class_id: newClass.id,
+        coach_id: coachId,
+      }));
+      
+      const { error: coachesError } = await supabaseClient.from('class_coaches').insert(coachInserts);
+      if (coachesError) {
+        console.error('Supabase: insert class coaches failed', coachesError.message);
       }
     }
   };
