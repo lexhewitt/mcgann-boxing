@@ -108,7 +108,6 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='members' label="Manage Members" />
             <TabButton tabName='coaches' label="Manage Coaches" />
             <TabButton tabName='classes' label="Manage Classes" />
-            <TabButton tabName='calendar' label="Calendar" />
             <TabButton tabName='financials' label="Financials" />
             <TabButton tabName='reports' label="Reports" />
             <TabButton tabName='whatsapp' label="WhatsApp" />

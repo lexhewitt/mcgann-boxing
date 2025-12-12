@@ -4,6 +4,7 @@ import StatCard from '../ui/StatCard';
 import Button from '../ui/Button';
 import { GymClass, Member } from '../../types';
 import ClassDetailsModal from './ClassDetailsModal';
+import AdminCalendarView from './AdminCalendarView';
 
 // Icons for Stat Cards
 const UsersIcon = () => (
@@ -114,6 +115,12 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ setActiveTab }) => {
                 <p className="text-gray-400">No members have joined yet.</p>
             )}
         </div>
+      </div>
+
+      {/* Calendar Section */}
+      <div className="bg-brand-dark p-6 rounded-lg">
+        <h3 className="text-xl font-bold text-white mb-4">Calendar</h3>
+        <AdminCalendarView />
       </div>
     </div>
     {selectedClass && (
