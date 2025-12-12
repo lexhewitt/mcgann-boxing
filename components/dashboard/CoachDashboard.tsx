@@ -92,6 +92,12 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     }).length;
     const pendingNotificationsCount = pendingTransferCount + pendingBookingAlertCount;
 
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await refreshData();
+        setIsRefreshing(false);
+    };
+
     const TabButton:React.FC<{tabName: CoachTab, label: string, count?: number}> = ({tabName, label, count}) => (
       <button
         onClick={() => setActiveTab(tabName)}
