@@ -188,15 +188,9 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                     title="Refresh all data from database"
                 >
                     {isRefreshing ? (
-                        <>
-                            <span className="animate-spin">🔄</span>
-                            <span>Refreshing...</span>
-                        </>
+                        <span>Refreshing...</span>
                     ) : (
-                        <>
-                            <span>🔄</span>
-                            <span>Refresh Data</span>
-                        </>
+                        <span>Refresh Data</span>
                     )}
                 </button>
             </div>
