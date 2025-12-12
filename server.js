@@ -469,9 +469,27 @@ const handleCheckoutSessionCompleted = async (session) => {
 
   // Treat everything else as a guest purchase
   const guestBookingData = metadata.guestBooking ? JSON.parse(metadata.guestBooking) : {};
+  
+  // For private sessions without a slotId (generated from availability), create a slot first
+  let finalSlotId = metadata.slotId;
+  if (!metadata.slotId && !metadata.classId && metadata.sessionStart && metadata.coachId) {
+    const sessionStart = new Date(metadata.sessionStart);
+    const sessionEnd = new Date(sessionStart);
+    sessionEnd.setHours(sessionEnd.getHours() + 1); // Default 1-hour session
+    
+    finalSlotId = await ensureSlot({
+      coachId: metadata.coachId,
+      title: metadata.slotTitle || 'Private Session',
+      start: sessionStart.toISOString(),
+      end: sessionEnd.toISOString(),
+      type: metadata.slotType || 'PRIVATE',
+      price: session.amount_total ? session.amount_total / 100 : 30,
+    });
+  }
+  
   await ensureGuestBooking({
     serviceType: metadata.classId ? 'CLASS' : 'PRIVATE',
-    referenceId: metadata.classId || metadata.slotId,
+    referenceId: metadata.classId || finalSlotId,
     title: metadata.className || metadata.slotTitle || 'Guest Booking',
     date: metadata.sessionStart,
     participantName: metadata.participantName || guestBookingData.participantName,
