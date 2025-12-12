@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { GymClass, Booking, UserRole, GuestBooking } from '../../types';
+import { GymClass, Booking, UserRole, GuestBooking, Coach } from '../../types';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import Modal from '../ui/Modal';
