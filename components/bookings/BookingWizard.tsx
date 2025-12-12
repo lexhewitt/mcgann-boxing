@@ -39,7 +39,7 @@ const formatTime = (date: Date) =>
   date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 const BookingWizard: React.FC = () => {
-  const { classes, coaches, coachSlots, guestBookings, addGuestBooking } = useData();
+  const { classes, coaches, coachSlots, coachAvailability, unavailableSlots, coachAppointments, guestBookings, addGuestBooking } = useData();
   
   // Step 1: Coach selection
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
@@ -128,69 +128,161 @@ const BookingWizard: React.FC = () => {
   const slotItems = useMemo(() => {
     const now = new Date();
     const monthStart = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
     const monthEnd = new Date(monthAnchor.getFullYear(), monthAnchor.getMonth() + 1, 0);
+    monthEnd.setHours(23, 59, 59, 999);
+    
+    if (!selectedCoach) return [];
     
     // Debug logging
     console.log('[BookingWizard] Filtering slots:', {
       totalSlots: coachSlots.length,
+      totalAvailability: coachAvailability.length,
       selectedCoachId: selectedCoach?.id,
       selectedServiceType,
       monthStart: monthStart.toISOString(),
       monthEnd: monthEnd.toISOString(),
     });
 
-    const filtered = coachSlots
+    const items: BookableItem[] = [];
+    
+    // 1. Add one-off slots (existing coach_slots)
+    const oneOffSlots = coachSlots
       .filter(slot => {
         // Filter by selected coach
-        if (selectedCoach && slot.coachId !== selectedCoach.id) {
-          console.log(`[BookingWizard] Skipping slot ${slot.title} - coach mismatch: ${slot.coachId} !== ${selectedCoach.id}`);
-          return false;
-        }
+        if (slot.coachId !== selectedCoach.id) return false;
         // Filter by service type
-        if (selectedServiceType === 'PRIVATE' && slot.type !== SlotType.PRIVATE) {
-          console.log(`[BookingWizard] Skipping slot ${slot.title} - type mismatch: ${slot.type} !== PRIVATE`);
-          return false;
-        }
-        if (selectedServiceType === 'GROUP' && slot.type !== SlotType.GROUP) {
-          console.log(`[BookingWizard] Skipping slot ${slot.title} - type mismatch: ${slot.type} !== GROUP`);
-          return false;
-        }
+        if (selectedServiceType === 'PRIVATE' && slot.type !== SlotType.PRIVATE) return false;
+        if (selectedServiceType === 'GROUP' && slot.type !== SlotType.GROUP) return false;
         return true;
       })
       .filter(slot => {
         const slotDate = new Date(slot.start);
         const inMonth = slotDate >= monthStart && slotDate <= monthEnd;
-        if (!inMonth) {
-          console.log(`[BookingWizard] Skipping slot ${slot.title} - outside month: ${slotDate.toISOString()}`);
-        }
-        return inMonth;
-      })
-      .filter(slot => {
-        const slotDate = new Date(slot.start);
         const isFuture = slotDate >= now;
-        if (!isFuture) {
-          console.log(`[BookingWizard] Skipping slot ${slot.title} - in past: ${slotDate.toISOString()}`);
-        }
-        return isFuture;
+        return inMonth && isFuture;
       })
       .map(slot => {
         const coach = coaches.find(c => c.id === slot.coachId);
+        const slotDate = new Date(slot.start);
+        // Check if already booked
+        const isBooked = coachAppointments.some(apt => apt.slotId === slot.id);
         return {
           id: `slot-${slot.id}`,
           type: slot.type === SlotType.GROUP ? 'GROUP' : 'PRIVATE',
-          title: slot.title,
-          subtitle: `${coach?.name ?? 'Coach'} · ${formatTime(new Date(slot.start))}`,
-          date: new Date(slot.start),
+          title: isBooked ? `${slot.title} (Booked)` : slot.title,
+          subtitle: `${coach?.name ?? 'Coach'} · ${formatTime(slotDate)}`,
+          date: slotDate,
           price: slot.price,
           coachName: coach?.name,
           coachId: slot.coachId,
           slotId: slot.id,
         } as BookableItem;
       });
+    items.push(...oneOffSlots);
     
-    console.log(`[BookingWizard] Found ${filtered.length} slots for month`);
-    return filtered;
-  }, [coachSlots, coaches, monthAnchor, selectedCoach, selectedServiceType]);
+    // 2. Generate slots from recurring availability (for private sessions)
+    if (selectedServiceType === 'PRIVATE') {
+      const coachAvail = coachAvailability.filter(av => av.coachId === selectedCoach.id);
+      const dayNames: Record<string, number> = {
+        'Sunday': 0, 'Monday': 1, 'Tuesday': 2, 'Wednesday': 3,
+        'Thursday': 4, 'Friday': 5, 'Saturday': 6
+      };
+      
+      // Generate slots for each day in the month
+      let iterator = new Date(monthStart);
+      while (iterator <= monthEnd) {
+        const dayName = iterator.toLocaleDateString('en-US', { weekday: 'long' });
+        const dayAvail = coachAvail.filter(av => av.day === dayName);
+        
+        dayAvail.forEach(av => {
+          const [startHour, startMin] = av.startTime.split(':').map(Number);
+          const [endHour, endMin] = av.endTime.split(':').map(Number);
+          
+          // Create 1-hour slots within the availability window
+          let slotStart = new Date(iterator);
+          slotStart.setHours(startHour, startMin, 0, 0);
+          
+          const availabilityEnd = new Date(iterator);
+          availabilityEnd.setHours(endHour, endMin, 0, 0);
+          
+          // Generate slots in 1-hour increments
+          while (slotStart < availabilityEnd && slotStart >= now) {
+            const slotEnd = new Date(slotStart);
+            slotEnd.setHours(slotEnd.getHours() + 1);
+            
+            if (slotEnd <= availabilityEnd) {
+              // Check if this time is blocked by unavailable slot
+              const dateString = iterator.toISOString().split('T')[0];
+              const isBlocked = unavailableSlots.some(blocked => {
+                if (blocked.coachId !== selectedCoach.id || blocked.date !== dateString) return false;
+                if (!blocked.startTime || !blocked.endTime) return true; // All-day block
+                const [blockStartH, blockStartM] = blocked.startTime.split(':').map(Number);
+                const [blockEndH, blockEndM] = blocked.endTime.split(':').map(Number);
+                const blockStart = new Date(iterator);
+                blockStart.setHours(blockStartH, blockStartM, 0, 0);
+                const blockEnd = new Date(iterator);
+                blockEnd.setHours(blockEndH, blockEndM, 0, 0);
+                return slotStart < blockEnd && slotEnd > blockStart;
+              });
+              
+              // Check if there's a conflicting class
+              const hasClassConflict = classes.some(cls => {
+                if (cls.coachId !== selectedCoach.id && !(cls.coachIds && cls.coachIds.includes(selectedCoach.id))) return false;
+                if (dayNames[cls.day] !== iterator.getDay()) return false;
+                const timeParts = cls.time.split('–');
+                const [classStartH, classStartM] = timeParts[0].trim().split(':').map(Number);
+                const classStart = new Date(iterator);
+                classStart.setHours(classStartH, classStartM, 0, 0);
+                const classEnd = new Date(classStart);
+                const timeEndPart = timeParts[1]?.trim();
+                if (timeEndPart) {
+                  const [classEndH, classEndM] = timeEndPart.split(':').map(Number);
+                  classEnd.setHours(classEndH, classEndM, 0, 0);
+                } else {
+                  classEnd.setHours(classStartH + 1, classStartM, 0, 0);
+                }
+                return slotStart < classEnd && slotEnd > classStart;
+              });
+              
+              // Check if there's already a one-off slot at this time
+              const hasExistingSlot = coachSlots.some(slot => {
+                if (slot.coachId !== selectedCoach.id) return false;
+                const existingStart = new Date(slot.start);
+                return existingStart.toDateString() === slotStart.toDateString() &&
+                       existingStart.getHours() === slotStart.getHours() &&
+                       existingStart.getMinutes() === slotStart.getMinutes();
+              });
+              
+              if (!isBlocked && !hasClassConflict && !hasExistingSlot && slotStart >= now) {
+                items.push({
+                  id: `avail-${selectedCoach.id}-${slotStart.toISOString()}`,
+                  type: 'PRIVATE',
+                  title: 'Private Session',
+                  subtitle: `${selectedCoach.name} · ${formatTime(slotStart)}`,
+                  date: new Date(slotStart),
+                  price: 30, // Default price, could be from coach settings
+                  coachName: selectedCoach.name,
+                  coachId: selectedCoach.id,
+                  slotId: undefined, // Generated slot, not an existing one
+                } as BookableItem);
+              }
+            }
+            
+            slotStart.setHours(slotStart.getHours() + 1);
+          }
+        });
+        
+        iterator.setDate(iterator.getDate() + 1);
+      }
+    }
+    
+    // Sort by date
+    items.sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    console.log(`[BookingWizard] Found ${items.length} total slots for month (${oneOffSlots.length} one-off, ${items.length - oneOffSlots.length} from availability)`);
+    return items;
+  }, [coachSlots, coachAvailability, unavailableSlots, classes, coachAppointments, coaches, monthAnchor, selectedCoach, selectedServiceType]);
 
   const availableItems = useMemo(() => {
     if (selectedServiceType === 'CLASS') {
@@ -346,12 +438,14 @@ const BookingWizard: React.FC = () => {
     };
     localStorage.setItem('pendingGuestBooking', JSON.stringify(guestPayload));
 
+    // For generated slots from availability (no slotId), we need to pass the date/time info
+    // The server will handle creating the slot if needed
     const result = await handleGuestCheckout({
       price: selectedItem.price,
       className: selectedItem.type === 'CLASS' ? selectedItem.title : undefined,
       classId: selectedItem.classId,
       slotTitle: selectedItem.type !== 'CLASS' ? selectedItem.title : undefined,
-      slotId: selectedItem.slotId,
+      slotId: selectedItem.slotId, // undefined for generated slots from availability
       coachId: selectedItem.coachId,
       sessionStart: selectedItem.date.toISOString(),
       guestBooking: {
