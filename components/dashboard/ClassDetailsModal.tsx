@@ -13,11 +13,15 @@ import RequestCoverModal from './RequestCoverModal';
 interface ClassDetailsModalProps {
   gymClass: GymClass;
   onClose: () => void;
+  coachToView?: Coach; // Optional: when admin is viewing a specific coach's dashboard
 }
 
-const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose }) => {
+const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose, coachToView }) => {
   const { members, familyMembers, bookings, coaches, cancelBooking, cancelGuestBooking, undoClassTransfer, toggleAttendance, guestBookings } = useData();
   const { currentUser } = useAuth();
+  
+  // Determine the effective coach - use coachToView if provided (admin viewing coach), otherwise use currentUser
+  const effectiveCoach = coachToView || currentUser;
   const [bookingToTransfer, setBookingToTransfer] = useState<Booking | null>(null);
   const [isEditingClass, setIsEditingClass] = useState(false);
   const [isAddingMember, setIsAddingMember] = useState(false);
@@ -39,8 +43,8 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
   })).filter(item => !!item.participant);
 
   const isAuthorized = currentUser?.role === 'ADMIN' || 
-                      currentUser?.id === gymClass.coachId || 
-                      (gymClass.coachIds && gymClass.coachIds.includes(currentUser?.id || ''));
+                      effectiveCoach?.id === gymClass.coachId || 
+                      (gymClass.coachIds && gymClass.coachIds.includes(effectiveCoach?.id || ''));
   const isClassFull = totalConfirmedCount >= gymClass.capacity;
 
   const handleRemove = async (bookingId: string) => {
@@ -139,8 +143,8 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
                         {isClassFull ? 'Class Full' : 'Add Member'}
                     </Button>
                 )}
-                 {currentUser?.role !== UserRole.MEMBER && !gymClass.originalCoachId && 
-                  (currentUser?.id === gymClass.coachId || (gymClass.coachIds && gymClass.coachIds.includes(currentUser?.id || ''))) && (
+                 {effectiveCoach?.role !== UserRole.MEMBER && !gymClass.originalCoachId && 
+                  (effectiveCoach?.id === gymClass.coachId || (gymClass.coachIds && gymClass.coachIds.includes(effectiveCoach?.id || ''))) && (
                      <Button variant="secondary" onClick={() => setIsRequestingCover(true)}>Request Cover</Button>
                  )}
                  {gymClass.originalCoachId && (currentUser?.id === gymClass.originalCoachId || currentUser?.role === UserRole.ADMIN) && (

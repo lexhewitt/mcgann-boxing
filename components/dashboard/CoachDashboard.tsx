@@ -261,6 +261,7 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
                 <ClassDetailsModal
                     gymClass={selectedClass}
                     onClose={() => setSelectedClass(null)}
+                    coachToView={coachToView}
                 />
             )}
         </div>
