@@ -20,7 +20,11 @@ const CoachFinancialSummary: React.FC<CoachFinancialSummaryProps> = ({ coach, bo
                 const member = members.find(m => m.id === booking.memberId);
                 return { booking, gymClass, member };
             })
-            .filter(item => item.gymClass?.coachId === coach.id && item.gymClass && item.member)
+            .filter(item => 
+              item.gymClass && item.member && 
+              (item.gymClass.coachId === coach.id || 
+               (item.gymClass.coachIds && item.gymClass.coachIds.includes(coach.id)))
+            )
             .sort((a, b) => new Date(b.booking.bookingDate).getTime() - new Date(a.booking.bookingDate).getTime());
     }, [paidBookings, coach.id, classes, members]);
 

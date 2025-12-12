@@ -133,7 +133,37 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
       if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
       if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
-      if (!classesRes.error && classesRes.data) setClasses(classesRes.data as GymClass[]);
+      
+      // Map classes with multiple coaches from junction table
+      if (!classesRes.error && classesRes.data) {
+        const classCoachMap: Record<string, string[]> = {};
+        if (!classCoachesRes.error && classCoachesRes.data) {
+          (classCoachesRes.data as any[]).forEach(cc => {
+            if (!classCoachMap[cc.class_id]) {
+              classCoachMap[cc.class_id] = [];
+            }
+            classCoachMap[cc.class_id].push(cc.coach_id);
+          });
+        }
+        const mappedClasses = (classesRes.data as any[]).map(row => {
+          const coachIds = classCoachMap[row.id] || [];
+          return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            day: row.day,
+            time: row.time,
+            coachId: row.coach_id,
+            coachIds: coachIds.length > 0 ? coachIds : undefined,
+            capacity: row.capacity,
+            price: Number(row.price),
+            minAge: row.min_age,
+            maxAge: row.max_age,
+            originalCoachId: row.original_coach_id,
+          } as GymClass;
+        });
+        setClasses(mappedClasses);
+      }
       if (!bookingsRes.error && bookingsRes.data) {
         const mapped = bookingsRes.data.map((b: any) => ({
           id: b.id,

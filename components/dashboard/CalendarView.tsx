@@ -16,7 +16,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ coachId }) => {
 
   const filteredClasses = useMemo(() => {
     if (coachId) {
-      return classes.filter(c => c.coachId === coachId);
+      return classes.filter(c => 
+        c.coachId === coachId || 
+        (c.coachIds && c.coachIds.includes(coachId))
+      );
     }
     return classes;
   }, [classes, coachId]);

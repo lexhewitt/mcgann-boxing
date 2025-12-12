@@ -62,7 +62,10 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
         );
     }
 
-    const coachClasses = classes.filter(c => c.coachId === coachForDashboard.id);
+    const coachClasses = classes.filter(c => 
+      c.coachId === coachForDashboard.id || 
+      (c.coachIds && c.coachIds.includes(coachForDashboard.id))
+    );
     const pendingTransferCount = notifications.filter(
         n => (coachForDashboard.role === UserRole.ADMIN ? true : n.targetCoachId === coachForDashboard.id) && n.status === NotificationStatus.PENDING
     ).length;

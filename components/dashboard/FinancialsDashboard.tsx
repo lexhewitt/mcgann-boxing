@@ -81,7 +81,11 @@ const FinancialsDashboard: React.FC<FinancialsDashboardProps> = ({ user, onViewC
                 const member = members.find(m => m.id === booking.memberId);
                 return { booking, gymClass, member };
             })
-            .filter(item => item.gymClass?.coachId === selectedCoachId && item.gymClass && item.member)
+            .filter(item => 
+              item.gymClass && item.member && 
+              (item.gymClass.coachId === selectedCoachId || 
+               (item.gymClass.coachIds && item.gymClass.coachIds.includes(selectedCoachId)))
+            )
             .sort((a, b) => new Date(b.booking.bookingDate).getTime() - new Date(a.booking.bookingDate).getTime());
     }, [paidBookings, classes, members, selectedCoachId]);
 

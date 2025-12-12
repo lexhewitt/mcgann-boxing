@@ -18,7 +18,10 @@ const CoachScheduleView: React.FC<CoachScheduleViewProps> = ({ coachId }) => {
 
   // Filter data for this coach
   const coachClasses = useMemo(() => 
-    classes.filter(c => c.coachId === coachId),
+    classes.filter(c => 
+      c.coachId === coachId || 
+      (c.coachIds && c.coachIds.includes(coachId))
+    ),
     [classes, coachId]
   );
 
