@@ -10,3 +10,4 @@ FROM information_schema.columns
 WHERE table_name = 'coaches' 
   AND column_name = 'whatsapp_auto_reply_message';
 
+

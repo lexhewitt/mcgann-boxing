@@ -57,3 +57,4 @@ All coaches should have `whatsapp_auto_reply_enabled = true` by default.
 
 Your WhatsApp integration with coach controls is now fully configured and ready to use.
 
+

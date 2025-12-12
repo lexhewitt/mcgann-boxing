@@ -18,3 +18,4 @@ WHERE table_name = 'coaches'
   AND column_name IN ('whatsapp_auto_reply_enabled', 'whatsapp_auto_reply_message', 'mobile_number', 'image_url')
 ORDER BY column_name;
 
+

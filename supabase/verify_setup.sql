@@ -28,3 +28,4 @@ ORDER BY name;
 -- 4. Count total coaches
 SELECT COUNT(*) as total_coaches FROM coaches;
 
+

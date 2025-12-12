@@ -83,3 +83,4 @@ When working correctly, you should see:
 - ✅ Auto-reply message is sent with booking link
 - ✅ Booking link includes correct coach ID and calendar view
 
+

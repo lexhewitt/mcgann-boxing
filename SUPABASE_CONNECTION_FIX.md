@@ -78,3 +78,4 @@ curl -I https://nthibubpasppgpozlqvw.supabase.co/rest/v1/
 
 If you get `ERR_NAME_NOT_RESOLVED`, the project is paused or deleted.
 
+

@@ -58,3 +58,4 @@
 - `meta-app-secret` (META_APP_SECRET)
 - `supabase-service-role-key` (SUPABASE_SERVICE_ROLE_KEY)
 
+

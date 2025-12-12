@@ -57,3 +57,4 @@ After tables are created:
 2. Coaches can toggle auto-reply on/off
 3. The webhook will check the auto-reply setting before sending messages
 
+

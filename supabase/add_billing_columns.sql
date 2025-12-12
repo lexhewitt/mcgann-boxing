@@ -64,3 +64,4 @@ CREATE INDEX IF NOT EXISTS idx_statements_member ON monthly_statements(member_id
 CREATE INDEX IF NOT EXISTS idx_statements_period ON monthly_statements(statement_period_start, statement_period_end);
 CREATE INDEX IF NOT EXISTS idx_transactions_customer ON transactions(stripe_customer_id);
 
+

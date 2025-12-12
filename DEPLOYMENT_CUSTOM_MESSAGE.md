@@ -77,3 +77,4 @@ When someone asks "When are you available?", they'll receive this personalized m
 - [ ] Test auto-reply with custom message
 - [ ] Reset to default and verify
 
+
