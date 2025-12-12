@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import Button from '../ui/Button';
 import { GymClass } from '../../types';
@@ -8,6 +8,20 @@ import EditClassModal from './EditClassModal';
 
 const ClassManagement: React.FC = () => {
   const { classes, coaches, deleteClass } = useData();
+  
+  // Sort classes by day (Monday first) then by time
+  const sortedClasses = useMemo(() => {
+    const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    return [...classes].sort((a, b) => {
+      const dayA = dayOrder.indexOf(a.day);
+      const dayB = dayOrder.indexOf(b.day);
+      if (dayA !== dayB) {
+        return dayA - dayB;
+      }
+      // If same day, sort by time
+      return a.time.localeCompare(b.time);
+    });
+  }, [classes]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -46,7 +60,7 @@ const ClassManagement: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {classes.map(cls => (
+            {sortedClasses.map(cls => (
               <tr key={cls.id} className="border-b border-gray-800 hover:bg-gray-800">
                 <td className="py-2 px-4">{cls.name}</td>
                 <td className="py-2 px-4">{cls.day}</td>

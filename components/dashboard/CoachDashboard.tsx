@@ -62,10 +62,24 @@ const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
         );
     }
 
-    const coachClasses = classes.filter(c => 
-      c.coachId === coachForDashboard.id || 
-      (c.coachIds && c.coachIds.includes(coachForDashboard.id))
-    );
+    const coachClasses = useMemo(() => {
+      const filtered = classes.filter(c => 
+        c.coachId === coachForDashboard.id || 
+        (c.coachIds && c.coachIds.includes(coachForDashboard.id))
+      );
+      
+      // Sort by day (Monday first) then by time
+      const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      return filtered.sort((a, b) => {
+        const dayA = dayOrder.indexOf(a.day);
+        const dayB = dayOrder.indexOf(b.day);
+        if (dayA !== dayB) {
+          return dayA - dayB;
+        }
+        // If same day, sort by time
+        return a.time.localeCompare(b.time);
+      });
+    }, [classes, coachForDashboard.id]);
     const pendingTransferCount = notifications.filter(
         n => (coachForDashboard.role === UserRole.ADMIN ? true : n.targetCoachId === coachForDashboard.id) && n.status === NotificationStatus.PENDING
     ).length;
