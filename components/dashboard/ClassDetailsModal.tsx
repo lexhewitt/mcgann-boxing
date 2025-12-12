@@ -38,7 +38,9 @@ const ClassDetailsModal: React.FC<ClassDetailsModalProps> = ({ gymClass, onClose
     participant: allParticipants.find(p => p.id === b.participantId),
   })).filter(item => !!item.participant);
 
-  const isAuthorized = currentUser?.role === 'ADMIN' || currentUser?.id === gymClass.coachId;
+  const isAuthorized = currentUser?.role === 'ADMIN' || 
+                      currentUser?.id === gymClass.coachId || 
+                      (gymClass.coachIds && gymClass.coachIds.includes(currentUser?.id || ''));
   const isClassFull = totalConfirmedCount >= gymClass.capacity;
 
   const handleRemove = async (bookingId: string) => {
