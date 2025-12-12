@@ -19,6 +19,11 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
     const [note, setNote] = useState('');
     const [error, setError] = useState('');
 
+    // Get all coaches except the current user
+    const allOtherCoaches = useMemo(() => {
+        return coaches.filter(coach => coach.id !== currentUser?.id);
+    }, [coaches, currentUser]);
+
     const availableCoaches = useMemo(() => {
         const nextClassDate = getNextDateForDay(gymClass.day);
         return coaches.filter(coach => {
@@ -36,6 +41,11 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
             return availabilityCheck.isAvailable;
         });
     }, [coaches, gymClass, classes, coachAvailability, unavailableSlots, currentUser]);
+
+    // Find admin (Sean) to include as an option
+    const adminCoach = useMemo(() => {
+        return coaches.find(c => c.role === 'ADMIN');
+    }, [coaches]);
     
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -73,19 +83,39 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
                         required
                     >
                         <option value="">-- Choose a coach --</option>
-                        {availableCoaches.map(coach => (
-                            <option key={coach.id} value={coach.id}>
-                                {coach.name}
-                            </option>
-                        ))}
+                        {availableCoaches.length > 0 && (
+                            <optgroup label="Available Coaches">
+                                {availableCoaches.map(coach => (
+                                    <option key={coach.id} value={coach.id}>
+                                        {coach.name} {coach.role === 'ADMIN' ? '(Admin)' : ''}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        )}
+                        {allOtherCoaches.length > availableCoaches.length && (
+                            <optgroup label="Other Coaches (may have conflicts)">
+                                {allOtherCoaches
+                                    .filter(c => !availableCoaches.find(ac => ac.id === c.id))
+                                    .map(coach => (
+                                        <option key={coach.id} value={coach.id}>
+                                            {coach.name} {coach.role === 'ADMIN' ? '(Admin)' : ''} - May have schedule conflict
+                                        </option>
+                                    ))}
+                            </optgroup>
+                        )}
                     </select>
-                    {availableCoaches.length === 0 && (
+                    {availableCoaches.length === 0 && allOtherCoaches.length > 0 && (
                         <p className="text-sm text-yellow-400 mt-2">
-                            No other coaches are available at this time. You can still request cover - Sean (Admin) will be notified.
+                            ⚠️ No coaches appear available at this time, but you can still request cover. Sean (Admin) will be notified and can assign someone.
+                        </p>
+                    )}
+                    {allOtherCoaches.length === 0 && (
+                        <p className="text-sm text-yellow-400 mt-2">
+                            No other coaches in the system. Contact Sean (Admin) directly.
                         </p>
                     )}
                     <p className="text-xs text-gray-400 mt-2">
-                        💡 Sean (Admin) will also be notified and can accept the request.
+                        💡 Sean (Admin) will be notified and can accept/assign the request even if you select another coach.
                     </p>
                 </div>
                 
@@ -107,7 +137,7 @@ const RequestCoverModal: React.FC<RequestCoverModalProps> = ({ gymClass, onClose
                     <Button type="button" variant="secondary" onClick={onClose}>
                         Cancel
                     </Button>
-                    <Button type="submit" disabled={availableCoaches.length === 0}>
+                    <Button type="submit" disabled={!targetCoachId || allOtherCoaches.length === 0}>
                         Send Request
                     </Button>
                 </div>
