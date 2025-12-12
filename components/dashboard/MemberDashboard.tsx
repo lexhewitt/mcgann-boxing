@@ -153,7 +153,7 @@ const MemberDashboard: React.FC = () => {
                     disabled={isRefreshing}
                     className="text-sm"
                 >
-                    {isRefreshing ? 'Refreshing...' : '🔄 Refresh'}
+                    {isRefreshing ? 'Refreshing...' : 'Refresh'}
                 </Button>
             </div>
 

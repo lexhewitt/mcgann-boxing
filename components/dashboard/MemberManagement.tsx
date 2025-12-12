@@ -348,7 +348,7 @@ const MemberManagement: React.FC = () => {
               }}
               disabled={isRefreshing}
             >
-              {isRefreshing ? '🔄 Refreshing...' : '🔄 Refresh from Database'}
+              {isRefreshing ? 'Refreshing...' : 'Refresh from Database'}
             </Button>
             <Button onClick={() => setIsAddModalOpen(true)}>Add New Member</Button>
           </div>
