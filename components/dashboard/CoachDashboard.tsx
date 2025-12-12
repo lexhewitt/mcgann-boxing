@@ -25,10 +25,11 @@ interface CoachDashboardProps {
 
 const CoachDashboard: React.FC<CoachDashboardProps> = ({ coachToView }) => {
     const { currentUser } = useAuth();
-    const { classes, bookings, notifications, bookingAlerts, updateCoach, coaches } = useData();
+    const { classes, bookings, notifications, bookingAlerts, updateCoach, coaches, refreshData, undoClassTransfer } = useData();
     const [selectedClass, setSelectedClass] = useState<GymClass | null>(null);
     const [activeTab, setActiveTab] = useState<CoachTab>('classes');
     const [isEditingProfile, setIsEditingProfile] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
     // Get the coach from the coaches array to ensure we have the latest data
     const coachForDashboard = useMemo(() => {

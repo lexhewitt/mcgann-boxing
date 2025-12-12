@@ -25,8 +25,9 @@ interface AdminDashboardProps {
 const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [financialCoach, setFinancialCoach] = useState<Coach | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const { currentUser } = useAuth();
-  const { bookings, classes, members, notifications, bookingAlerts } = useData();
+  const { bookings, classes, members, notifications, bookingAlerts, refreshData } = useData();
   const pendingClassTransfers = notifications.filter(n => n.status === NotificationStatus.PENDING).length;
   const pendingBookingAlerts = (() => {
     const raw = bookingAlerts.filter(alert => alert.status === 'PENDING');
@@ -100,9 +101,35 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
       </button>
   )
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshData();
+    setIsRefreshing(false);
+  };
+
   return (
     <div>
-        <h2 className="text-2xl font-bold text-white mb-4">Admin Dashboard</h2>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold text-white">Admin Dashboard</h2>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="px-4 py-2 bg-brand-red text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-semibold"
+            title="Refresh all data from database"
+          >
+            {isRefreshing ? (
+              <>
+                <span className="animate-spin">🔄</span>
+                <span>Refreshing...</span>
+              </>
+            ) : (
+              <>
+                <span>🔄</span>
+                <span>Refresh Data</span>
+              </>
+            )}
+          </button>
+        </div>
         <div className="border-b border-gray-700 flex flex-wrap">
             <TabButton tabName='overview' label="Overview" />
             <TabButton tabName='members' label="Manage Members" />
