@@ -699,6 +699,19 @@ apiRouter.post('/auth/register', express.json(), async (req, res) => {
       }
     }
 
+    // Send welcome email
+    try {
+      const emailService = require('./services/emailService');
+      await emailService.sendWelcomeEmail({
+        email: newMember.email,
+        userName: newMember.name,
+      });
+      console.log(`[Auth] Welcome email sent to ${newMember.email}`);
+    } catch (emailError) {
+      // Don't fail registration if email fails
+      console.error('[Auth] Failed to send welcome email:', emailError);
+    }
+
     return res.json({ 
       success: true, 
       user: {

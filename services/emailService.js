@@ -396,6 +396,134 @@ const generatePasswordResetHTML = (resetUrl, userName) => {
 };
 
 /**
+ * Generates HTML for welcome email
+ */
+const generateWelcomeHTML = (userName, userEmail) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <style>
+        body { 
+          font-family: Arial, sans-serif; 
+          line-height: 1.6; 
+          color: #333; 
+          margin: 0;
+          padding: 0;
+          background-color: #f4f4f4;
+        }
+        .container { 
+          max-width: 600px; 
+          margin: 20px auto; 
+          background: white;
+          border-radius: 8px;
+          overflow: hidden;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header { 
+          background: #dc2626; 
+          color: white; 
+          padding: 30px 20px; 
+          text-align: center; 
+        }
+        .header h1 { 
+          margin: 0;
+          font-size: 24px;
+        }
+        .content { 
+          padding: 30px 20px; 
+        }
+        .button {
+          display: inline-block;
+          padding: 12px 24px;
+          background: #dc2626;
+          color: white;
+          text-decoration: none;
+          border-radius: 6px;
+          margin-top: 20px;
+        }
+        .footer {
+          background: #f9fafb;
+          padding: 20px;
+          text-align: center;
+          color: #6b7280;
+          font-size: 12px;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Fleetwood Boxing Gym</h1>
+          <h2 style="margin: 10px 0 0 0; font-size: 18px; font-weight: normal;">Welcome!</h2>
+        </div>
+        <div class="content">
+          <p>Hello ${userName || 'there'},</p>
+          <p>Welcome to Fleetwood Boxing Gym! We're excited to have you join our community.</p>
+          <p>Your account has been successfully created with the email: <strong>${userEmail}</strong></p>
+          <p>You can now:</p>
+          <ul>
+            <li>Book classes and one-to-one sessions</li>
+            <li>View your upcoming bookings</li>
+            <li>Track your membership and payments</li>
+            <li>Manage your profile and family members</li>
+          </ul>
+          <p style="text-align: center; margin-top: 30px;">
+            <a href="https://mcgann-boxing-2coodfhbmq-nw.a.run.app" class="button">Access Your Dashboard</a>
+          </p>
+          <p>If you have any questions or need assistance, please don't hesitate to contact us.</p>
+          <p>We look forward to training with you!</p>
+        </div>
+        <div class="footer">
+          <p>Fleetwood Boxing Gym<br>
+          This is an automated email. Please do not reply directly to this message.</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+/**
+ * Sends a welcome email to a new member
+ */
+const sendWelcomeEmail = async (data) => {
+  try {
+    const emailTransporter = getTransporter();
+    
+    if (!emailTransporter) {
+      // Fallback: log the email
+      console.log('[Email] Welcome Email (not sent - Gmail not configured):', {
+        to: data.email,
+        userName: data.userName,
+      });
+      return { success: true, note: 'Email logged (Gmail not configured)' };
+    }
+
+    const mailOptions = {
+      from: `"Fleetwood Boxing Gym" <${process.env.GMAIL_USER}>`,
+      to: data.email,
+      subject: 'Welcome to Fleetwood Boxing Gym!',
+      html: generateWelcomeHTML(data.userName, data.email),
+      text: `Welcome to Fleetwood Boxing Gym!\n\nHello ${data.userName || 'there'},\n\nYour account has been successfully created with the email: ${data.email}\n\nYou can now book classes, view your bookings, and manage your profile.\n\nAccess your dashboard: https://mcgann-boxing-2coodfhbmq-nw.a.run.app\n\nWe look forward to training with you!`,
+    };
+
+    const info = await emailTransporter.sendMail(mailOptions);
+    console.log('[Email] Welcome email sent:', {
+      to: data.email,
+      messageId: info.messageId,
+    });
+    
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[Email] Failed to send welcome email:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+};
+
+/**
  * Sends a password reset email
  */
 const sendPasswordResetEmail = async (data) => {
@@ -436,4 +564,5 @@ module.exports = {
   sendMonthlyStatement,
   sendInvoiceReminder,
   sendPasswordResetEmail,
+  sendWelcomeEmail,
 };
