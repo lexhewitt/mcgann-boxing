@@ -681,6 +681,8 @@ apiRouter.post('/auth/register', express.json(), async (req, res) => {
           parent_id: memberId,
           name: fm.name,
           dob: fm.dob,
+          ability: fm.ability || null,
+          is_carded: fm.isCarded || false,
         }));
 
         const { error: familyError } = await supabase
