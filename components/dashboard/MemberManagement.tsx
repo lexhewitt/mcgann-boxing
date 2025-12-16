@@ -7,6 +7,7 @@ import Input from '../ui/Input';
 import { Member, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import MemberFinancialSummary from './MemberFinancialSummary';
+import SetPasswordModal from './SetPasswordModal';
 import { getSupabase } from '../../services/supabaseClient';
 
 interface AddMemberModalProps {
@@ -291,6 +292,8 @@ const MemberManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [memberToViewFinancials, setMemberToViewFinancials] = useState<Member | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [memberForPassword, setMemberForPassword] = useState<Member | null>(null);
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -374,6 +377,7 @@ const MemberManagement: React.FC = () => {
               <th className="py-2 px-4 text-left">Owed (£)</th>
               <th className="py-2 px-4 text-left">Financials</th>
               <th className="py-2 px-4 text-left">Email</th>
+              <th className="py-2 px-4 text-left">Password</th>
               <th className="py-2 px-4 text-left">Edit</th>
               <th className="py-2 px-4 text-left">Delete</th>
             </tr>
@@ -425,6 +429,21 @@ const MemberManagement: React.FC = () => {
       </div>
       <AddMemberModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} />
       <EditMemberModal isOpen={isEditModalOpen} onClose={handleCloseEditModal} member={memberToEdit} />
+      {memberForPassword && (
+        <SetPasswordModal
+          isOpen={isPasswordModalOpen}
+          onClose={() => {
+            setIsPasswordModalOpen(false);
+            setMemberForPassword(null);
+          }}
+          userName={memberForPassword.name}
+          userEmail={memberForPassword.email}
+          userId={memberForPassword.id}
+          onSuccess={() => {
+            // Optionally refresh data or show success message
+          }}
+        />
+      )}
       {memberToViewFinancials && (
         <Modal
           isOpen={!!memberToViewFinancials}

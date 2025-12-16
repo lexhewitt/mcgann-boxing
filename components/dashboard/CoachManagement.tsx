@@ -8,6 +8,7 @@ import Input from '../ui/Input';
 import { Coach, UserRole } from '../../types';
 import AddCoachModal from './AddCoachModal';
 import CoachSetupWizard from './CoachSetupWizard';
+import SetPasswordModal from './SetPasswordModal';
 
 interface EditCoachModalProps {
   isOpen: boolean;
@@ -94,6 +95,8 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [newlyCreatedCoach, setNewlyCreatedCoach] = useState<Coach | null>(null);
   const [coachToEdit, setCoachToEdit] = useState<Coach | null>(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+  const [coachForPassword, setCoachForPassword] = useState<Coach | null>(null);
 
   const handleEditClick = (coach: Coach) => {
     setCoachToEdit(coach);
@@ -180,6 +183,18 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
                       Edit
                     </Button>
                     <Button 
+                      variant="secondary" 
+                      className="text-xs py-1 px-2" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCoachForPassword(coach);
+                        setIsPasswordModalOpen(true);
+                      }}
+                      title="Set or reset password"
+                    >
+                      Set Password
+                    </Button>
+                    <Button 
                       variant="danger" 
                       className="text-xs py-1 px-2" 
                       onClick={(e) => {
@@ -219,6 +234,21 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
           isOpen={isWizardOpen}
           onClose={handleWizardClose}
           coach={newlyCreatedCoach}
+        />
+      )}
+      {coachForPassword && (
+        <SetPasswordModal
+          isOpen={isPasswordModalOpen}
+          onClose={() => {
+            setIsPasswordModalOpen(false);
+            setCoachForPassword(null);
+          }}
+          userName={coachForPassword.name}
+          userEmail={coachForPassword.email}
+          userId={coachForPassword.id}
+          onSuccess={() => {
+            // Optionally refresh data or show success message
+          }}
         />
       )}
     </>
