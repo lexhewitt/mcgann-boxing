@@ -1052,6 +1052,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
+  const updateFamilyMember = async (updatedFamilyMember: FamilyMember) => {
+    setFamilyMembers(prev => prev.map(fm => fm.id === updatedFamilyMember.id ? updatedFamilyMember : fm));
+    
+    // Save to Supabase
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      const { error } = await supabaseClient
+        .from('family_members')
+        .update({
+          name: updatedFamilyMember.name,
+          dob: updatedFamilyMember.dob,
+          ability: updatedFamilyMember.ability || null,
+          is_carded: updatedFamilyMember.isCarded || false,
+        })
+        .eq('id', updatedFamilyMember.id);
+      
+      if (error) {
+        console.error('Supabase: update family member failed', error.message);
+        // Revert local state if update failed
+        setFamilyMembers(prev => prev.map(fm => 
+          fm.id === updatedFamilyMember.id 
+            ? { ...fm, name: updatedFamilyMember.name, dob: updatedFamilyMember.dob, ability: updatedFamilyMember.ability, isCarded: updatedFamilyMember.isCarded }
+            : fm
+        ));
+        throw error;
+      }
+    }
+  };
+
   const deleteFamilyMember = (familyMemberId: string) => {
     setFamilyMembers(prev => prev.filter(fm => fm.id !== familyMemberId));
     // Also remove any bookings for that family member
