@@ -243,20 +243,6 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
                     <option value="Competitive">Competitive</option>
                   </select>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input 
-                    type="checkbox" 
-                    id={`family-carded-${index}`}
-                    checked={fm.isCarded || false}
-                    onChange={(e) => {
-                      const updated = [...familyMembers];
-                      updated[index].isCarded = e.target.checked;
-                      setFamilyMembers(updated);
-                    }}
-                    className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
-                  />
-                  <label htmlFor={`family-carded-${index}`} className="text-sm text-gray-300">Mark as Carded Boxer (Optional)</label>
-                </div>
               </div>
             );
           })}
