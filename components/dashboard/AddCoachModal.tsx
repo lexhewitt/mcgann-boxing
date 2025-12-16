@@ -5,8 +5,7 @@ import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { UserRole, Coach, AdminLevel } from '../../types';
-import { canManageAdmins } from '../../utils/permissions';
-import { useAuth } from '../../context/AuthContext';
+import { canManageAdmins, isAnyAdmin } from '../../utils/permissions';
 
 interface AddCoachModalProps {
   isOpen: boolean;
@@ -66,26 +65,34 @@ const AddCoachModal: React.FC<AddCoachModalProps> = ({ isOpen, onClose, onCoachA
             <option value={UserRole.ADMIN}>Admin</option>
           </select>
         </div>
-        {formData.role === UserRole.ADMIN && canManageAdmins(currentUser) && (
+        {formData.role === UserRole.ADMIN && isAnyAdmin(currentUser) && (
           <div>
             <label htmlFor="add-coach-admin-level" className="block text-sm font-medium text-gray-300 mb-1">Admin Level</label>
             <select 
               id="add-coach-admin-level" 
               name="adminLevel" 
-              value={formData.adminLevel || ''} 
+              value={formData.adminLevel || AdminLevel.STANDARD_ADMIN} 
               onChange={(e) => setFormData(prev => ({ ...prev, adminLevel: e.target.value as AdminLevel || undefined }))} 
               className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
             >
-              <option value="">Standard Admin (Cannot delete)</option>
               <option value={AdminLevel.STANDARD_ADMIN}>Standard Admin (Cannot delete)</option>
-              <option value={AdminLevel.FULL_ADMIN}>Full Admin (Can delete, cannot manage admins)</option>
-              <option value={AdminLevel.SUPERADMIN}>Super Admin (Full access)</option>
+              {canManageAdmins(currentUser) && (
+                <>
+                  <option value={AdminLevel.FULL_ADMIN}>Full Admin (Can delete, cannot manage admins)</option>
+                  <option value={AdminLevel.SUPERADMIN}>Super Admin (Full access)</option>
+                </>
+              )}
             </select>
             <p className="text-xs text-gray-400 mt-1">
               {formData.adminLevel === AdminLevel.STANDARD_ADMIN || !formData.adminLevel ? 'Cannot delete members, coaches, classes, or sessions' :
                formData.adminLevel === AdminLevel.FULL_ADMIN ? 'Can delete but cannot create/manage other admins' :
                'Full access including creating/managing admins'}
             </p>
+            {!canManageAdmins(currentUser) && (
+              <p className="text-xs text-yellow-400 mt-1">
+                Note: Only Super Admins can create Full Admins or Super Admins. You can create Standard Admins.
+              </p>
+            )}
           </div>
         )}
         <div>
