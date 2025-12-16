@@ -1535,6 +1535,281 @@ apiRouter.post('/whatsapp-webhook', express.raw({ type: 'application/json' }), a
   }
 });
 
+// ==================== BACKUP & RESTORE ENDPOINTS ====================
+
+// POST /server-api/backups/create - Create a system backup
+apiRouter.post('/backups/create', express.json(), async (req, res) => {
+  try {
+    const { backupName, backupDescription, userId } = req.body;
+    
+    if (!backupName || !backupName.trim()) {
+      return res.status(400).json({ error: 'Backup name is required' });
+    }
+
+    if (!userId) {
+      return res.status(401).json({ error: 'User authentication required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Collect all system data
+    const [
+      coachesRes,
+      membersRes,
+      familyRes,
+      classesRes,
+      bookingsRes,
+      transactionsRes,
+      coachSlotsRes,
+      coachAppointmentsRes,
+      guestBookingsRes,
+      coachAvailabilityRes,
+      unavailableSlotsRes,
+      classCoachesRes,
+      slotCoachesRes,
+      notificationsRes,
+    ] = await Promise.all([
+      supabase.from('coaches').select('*'),
+      supabase.from('members').select('*'),
+      supabase.from('family_members').select('*'),
+      supabase.from('classes').select('*'),
+      supabase.from('bookings').select('*'),
+      supabase.from('transactions').select('*'),
+      supabase.from('coach_slots').select('*'),
+      supabase.from('coach_appointments').select('*'),
+      supabase.from('guest_bookings').select('*'),
+      supabase.from('coach_availability').select('*'),
+      supabase.from('unavailable_slots').select('*'),
+      supabase.from('class_coaches').select('*'),
+      supabase.from('slot_coaches').select('*'),
+      supabase.from('notifications').select('*'),
+    ]);
+
+    const backupData = {
+      coaches: coachesRes.data || [],
+      members: membersRes.data || [],
+      familyMembers: familyRes.data || [],
+      classes: classesRes.data || [],
+      bookings: bookingsRes.data || [],
+      transactions: transactionsRes.data || [],
+      coachSlots: coachSlotsRes.data || [],
+      coachAppointments: coachAppointmentsRes.data || [],
+      guestBookings: guestBookingsRes.data || [],
+      coachAvailability: coachAvailabilityRes.data || [],
+      unavailableSlots: unavailableSlotsRes.data || [],
+      classCoaches: classCoachesRes.data || [],
+      slotCoaches: slotCoachesRes.data || [],
+      notifications: notificationsRes.data || [],
+      backupVersion: '1.0',
+      backupDate: new Date().toISOString(),
+    };
+
+    const backupJson = JSON.stringify(backupData, null, 2);
+    const fileSizeBytes = Buffer.byteLength(backupJson, 'utf8');
+
+    // Save backup to database
+    const backupId = `backup${Date.now()}`;
+    const { data: backupRecord, error: insertError } = await supabase
+      .from('backups')
+      .insert({
+        id: backupId,
+        created_by: userId,
+        backup_name: backupName.trim(),
+        backup_description: backupDescription?.trim() || null,
+        file_size_bytes: fileSizeBytes,
+        backup_data: backupData,
+      })
+      .select('id, created_at, backup_name')
+      .single();
+
+    if (insertError) {
+      console.error('Failed to save backup:', insertError);
+      return res.status(500).json({ error: 'Failed to save backup to database' });
+    }
+
+    console.log(`[Backup] Created backup ${backupId} by user ${userId}`);
+    
+    return res.json({
+      success: true,
+      backupId: backupRecord.id,
+      createdAt: backupRecord.created_at,
+      backupName: backupRecord.backup_name,
+      fileSizeBytes,
+    });
+  } catch (error) {
+    console.error('[Backup] Create error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /server-api/backups/list - List all backups
+apiRouter.get('/backups/list', async (req, res) => {
+  try {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    const { data: backups, error } = await supabase
+      .from('backups')
+      .select('id, created_by, created_at, backup_name, backup_description, file_size_bytes, restored_at, restored_by, is_active')
+      .eq('is_active', true)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Failed to list backups:', error);
+      return res.status(500).json({ error: 'Failed to list backups' });
+    }
+
+    return res.json({ success: true, backups: backups || [] });
+  } catch (error) {
+    console.error('[Backup] List error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /server-api/backups/download/:id - Download a backup as JSON file
+apiRouter.get('/backups/download/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    const { data: backup, error } = await supabase
+      .from('backups')
+      .select('backup_data, backup_name, created_at')
+      .eq('id', id)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !backup) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="backup-${backup.backup_name}-${backup.created_at.split('T')[0]}.json"`);
+    res.send(JSON.stringify(backup.backup_data, null, 2));
+  } catch (error) {
+    console.error('[Backup] Download error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /server-api/backups/restore/:id - Restore a backup
+apiRouter.post('/backups/restore/:id', express.json(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'User authentication required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Get the backup
+    const { data: backup, error: fetchError } = await supabase
+      .from('backups')
+      .select('backup_data, backup_name')
+      .eq('id', id)
+      .eq('is_active', true)
+      .single();
+
+    if (fetchError || !backup) {
+      return res.status(404).json({ error: 'Backup not found' });
+    }
+
+    const backupData = backup.backup_data;
+
+    // Start transaction-like process: delete all existing data, then insert backup data
+    console.log('[Backup] Starting restore process...');
+
+    // Delete all existing data (in correct order to respect foreign keys)
+    await supabase.from('slot_coaches').delete().neq('id', 'dummy'); // Delete all
+    await supabase.from('class_coaches').delete().neq('id', 'dummy');
+    await supabase.from('unavailable_slots').delete().neq('id', 'dummy');
+    await supabase.from('coach_availability').delete().neq('id', 'dummy');
+    await supabase.from('notifications').delete().neq('id', 'dummy');
+    await supabase.from('transactions').delete().neq('id', 'dummy');
+    await supabase.from('guest_bookings').delete().neq('id', 'dummy');
+    await supabase.from('coach_appointments').delete().neq('id', 'dummy');
+    await supabase.from('coach_slots').delete().neq('id', 'dummy');
+    await supabase.from('bookings').delete().neq('id', 'dummy');
+    await supabase.from('family_members').delete().neq('id', 'dummy');
+    await supabase.from('classes').delete().neq('id', 'dummy');
+    await supabase.from('members').delete().neq('id', 'dummy');
+    await supabase.from('coaches').delete().neq('id', 'dummy');
+
+    // Insert backup data
+    if (backupData.coaches && backupData.coaches.length > 0) {
+      await supabase.from('coaches').insert(backupData.coaches);
+    }
+    if (backupData.members && backupData.members.length > 0) {
+      await supabase.from('members').insert(backupData.members);
+    }
+    if (backupData.familyMembers && backupData.familyMembers.length > 0) {
+      await supabase.from('family_members').insert(backupData.familyMembers);
+    }
+    if (backupData.classes && backupData.classes.length > 0) {
+      await supabase.from('classes').insert(backupData.classes);
+    }
+    if (backupData.bookings && backupData.bookings.length > 0) {
+      await supabase.from('bookings').insert(backupData.bookings);
+    }
+    if (backupData.transactions && backupData.transactions.length > 0) {
+      await supabase.from('transactions').insert(backupData.transactions);
+    }
+    if (backupData.coachSlots && backupData.coachSlots.length > 0) {
+      await supabase.from('coach_slots').insert(backupData.coachSlots);
+    }
+    if (backupData.coachAppointments && backupData.coachAppointments.length > 0) {
+      await supabase.from('coach_appointments').insert(backupData.coachAppointments);
+    }
+    if (backupData.guestBookings && backupData.guestBookings.length > 0) {
+      await supabase.from('guest_bookings').insert(backupData.guestBookings);
+    }
+    if (backupData.coachAvailability && backupData.coachAvailability.length > 0) {
+      await supabase.from('coach_availability').insert(backupData.coachAvailability);
+    }
+    if (backupData.unavailableSlots && backupData.unavailableSlots.length > 0) {
+      await supabase.from('unavailable_slots').insert(backupData.unavailableSlots);
+    }
+    if (backupData.classCoaches && backupData.classCoaches.length > 0) {
+      await supabase.from('class_coaches').insert(backupData.classCoaches);
+    }
+    if (backupData.slotCoaches && backupData.slotCoaches.length > 0) {
+      await supabase.from('slot_coaches').insert(backupData.slotCoaches);
+    }
+    if (backupData.notifications && backupData.notifications.length > 0) {
+      await supabase.from('notifications').insert(backupData.notifications);
+    }
+
+    // Mark backup as restored
+    await supabase
+      .from('backups')
+      .update({
+        restored_at: new Date().toISOString(),
+        restored_by: userId,
+      })
+      .eq('id', id);
+
+    console.log(`[Backup] Restored backup ${id} by user ${userId}`);
+    
+    return res.json({ success: true, message: 'Backup restored successfully' });
+  } catch (error) {
+    console.error('[Backup] Restore error:', error);
+    return res.status(500).json({ error: 'Internal server error during restore' });
+  }
+});
+
 // --- Middleware & Route Registration ---
 
 // IMPORTANT: Mount the API router BEFORE the static file middleware.
