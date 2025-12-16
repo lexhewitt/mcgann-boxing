@@ -289,6 +289,7 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
 
 const MemberManagement: React.FC = () => {
   const { members, deleteMember, bookings, classes, familyMembers, transactions, refreshData, updateFamilyMember } = useData();
+  const { currentUser } = useAuth();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [memberToEdit, setMemberToEdit] = useState<Member | null>(null);
