@@ -129,6 +129,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           bankDetails: row.bank_details,
           whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
           whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
+          adminLevel: row.admin_level || undefined,
         })) as Coach[];
         setCoaches(mapped);
       }
@@ -1102,6 +1103,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           mobile_number: updatedCoach.mobileNumber,
           bank_details: updatedCoach.bankDetails,
           role: updatedCoach.role,
+          admin_level: updatedCoach.adminLevel || null,
           whatsapp_auto_reply_enabled: updatedCoach.whatsappAutoReplyEnabled ?? true,
           whatsapp_auto_reply_message: updatedCoach.whatsappAutoReplyMessage || null,
         })
@@ -1127,6 +1129,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
          mobile_number: newCoach.mobileNumber,
          bank_details: newCoach.bankDetails,
          role: newCoach.role,
+         admin_level: newCoach.adminLevel || null,
        }).then(({ error }) => {
          if (error) console.error('Supabase: insert coach failed', error.message);
        });

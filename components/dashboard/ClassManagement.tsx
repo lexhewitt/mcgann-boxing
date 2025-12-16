@@ -8,6 +8,7 @@ import EditClassModal from './EditClassModal';
 
 const ClassManagement: React.FC = () => {
   const { classes, coaches, deleteClass } = useData();
+  const { currentUser } = useAuth();
   
   // Sort classes by day (Monday first) then by time
   const sortedClasses = useMemo(() => {
@@ -70,7 +71,15 @@ const ClassManagement: React.FC = () => {
                 <td className="py-2 px-4">£{cls.price.toFixed(2)}</td>
                 <td className="py-2 px-4 space-x-2">
                   <Button variant="secondary" className="text-xs py-1 px-2" onClick={() => handleEditClick(cls)}>Edit</Button>
-                  <Button variant="danger" className="text-xs py-1 px-2" onClick={() => window.confirm('Are you sure?') && deleteClass(cls.id)}>Delete</Button>
+                  <Button 
+                    variant="danger" 
+                    className="text-xs py-1 px-2" 
+                    onClick={() => window.confirm('Are you sure?') && deleteClass(cls.id)}
+                    disabled={!canDeleteClasses(currentUser)}
+                    title={!canDeleteClasses(currentUser) ? "Only Full Admins and Super Admins can delete classes" : "Delete class"}
+                  >
+                    Delete
+                  </Button>
                 </td>
               </tr>
             ))}

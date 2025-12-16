@@ -201,6 +201,7 @@ const bootstrapTables = async () => {
       bankDetails: row.bank_details,
       whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
       whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
+      adminLevel: row.admin_level || undefined,
     }));
 
   return {
@@ -565,7 +566,7 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
     // Check coaches table
     const { data: coach, error: coachError } = await supabase
       .from('coaches')
-      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, password_hash')
+      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, admin_level, password_hash')
       .eq('email', email.toLowerCase())
       .maybeSingle();
 
@@ -596,7 +597,8 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
           mobileNumber: userData.mobile_number,
           bankDetails: userData.bank_details,
           whatsappAutoReplyEnabled: userData.whatsapp_auto_reply_enabled,
-          whatsappAutoReplyMessage: userData.whatsapp_auto_reply_message
+          whatsappAutoReplyMessage: userData.whatsapp_auto_reply_message,
+          adminLevel: userData.admin_level || undefined
         }
       });
     }

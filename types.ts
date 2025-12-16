@@ -5,6 +5,12 @@ export enum UserRole {
   ADMIN = 'ADMIN'
 }
 
+export enum AdminLevel {
+  SUPERADMIN = 'SUPERADMIN',      // Full access, can create/manage admins
+  FULL_ADMIN = 'FULL_ADMIN',      // Full access except cannot create/manage admins
+  STANDARD_ADMIN = 'STANDARD_ADMIN' // Cannot delete members, coaches, classes, sessions
+}
+
 export interface User {
   id: string;
   name: string;
@@ -36,6 +42,7 @@ export interface Coach extends User {
   bankDetails?: string; // e.g., Sort Code, Account Number
   whatsappAutoReplyEnabled?: boolean; // Default true, allows coach to disable auto-replies
   whatsappAutoReplyMessage?: string; // Custom auto-reply message (optional, uses default if not set)
+  adminLevel?: AdminLevel; // Only set for ADMIN role users
 }
 
 export type AppUser = Member | Coach;

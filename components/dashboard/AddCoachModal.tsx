@@ -4,7 +4,9 @@ import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
-import { UserRole, Coach } from '../../types';
+import { UserRole, Coach, AdminLevel } from '../../types';
+import { canManageAdmins } from '../../utils/permissions';
+import { useAuth } from '../../context/AuthContext';
 
 interface AddCoachModalProps {
   isOpen: boolean;
@@ -13,7 +15,7 @@ interface AddCoachModalProps {
 }
 
 const AddCoachModal: React.FC<AddCoachModalProps> = ({ isOpen, onClose, onCoachAdded }) => {
-  const { addCoach } = useAuth();
+  const { addCoach, currentUser } = useAuth();
   const initialFormData: Omit<Coach, 'id'> = {
     name: '',
     email: '',
@@ -64,6 +66,28 @@ const AddCoachModal: React.FC<AddCoachModalProps> = ({ isOpen, onClose, onCoachA
             <option value={UserRole.ADMIN}>Admin</option>
           </select>
         </div>
+        {formData.role === UserRole.ADMIN && canManageAdmins(currentUser) && (
+          <div>
+            <label htmlFor="add-coach-admin-level" className="block text-sm font-medium text-gray-300 mb-1">Admin Level</label>
+            <select 
+              id="add-coach-admin-level" 
+              name="adminLevel" 
+              value={formData.adminLevel || ''} 
+              onChange={(e) => setFormData(prev => ({ ...prev, adminLevel: e.target.value as AdminLevel || undefined }))} 
+              className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
+            >
+              <option value="">Standard Admin (Cannot delete)</option>
+              <option value={AdminLevel.STANDARD_ADMIN}>Standard Admin (Cannot delete)</option>
+              <option value={AdminLevel.FULL_ADMIN}>Full Admin (Can delete, cannot manage admins)</option>
+              <option value={AdminLevel.SUPERADMIN}>Super Admin (Full access)</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {formData.adminLevel === AdminLevel.STANDARD_ADMIN || !formData.adminLevel ? 'Cannot delete members, coaches, classes, or sessions' :
+               formData.adminLevel === AdminLevel.FULL_ADMIN ? 'Can delete but cannot create/manage other admins' :
+               'Full access including creating/managing admins'}
+            </p>
+          </div>
+        )}
         <div>
             <label htmlFor="add-coach-bio" className="block text-sm font-medium text-gray-300 mb-1">Bio</label>
             <textarea id="add-coach-bio" name="bio" value={formData.bio} onChange={handleChange} rows={3} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white placeholder-gray-500"></textarea>

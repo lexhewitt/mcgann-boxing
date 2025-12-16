@@ -203,9 +203,9 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
                               deleteCoach(coach.id);
                           }
                       }}
-                      disabled={!isAdmin || isSelf}
+                      disabled={!canDeleteCoaches(currentUser) || isSelf}
                       title={
-                        !isAdmin ? "Only admins can delete coaches." :
+                        !canDeleteCoaches(currentUser) ? "Only Full Admins and Super Admins can delete coaches." :
                         isSelf ? "You cannot delete your own account." :
                         `Delete ${coach.name}`
                       }

@@ -65,6 +65,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             bankDetails: user.bankDetails || user.bank_details,
             whatsappAutoReplyEnabled: user.whatsappAutoReplyEnabled ?? user.whatsapp_auto_reply_enabled,
             whatsappAutoReplyMessage: user.whatsappAutoReplyMessage || user.whatsapp_auto_reply_message,
+            adminLevel: user.adminLevel || user.admin_level || undefined,
           };
 
       setCurrentUser(appUser);

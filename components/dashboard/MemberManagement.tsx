@@ -6,6 +6,7 @@ import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { Member, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { canDeleteMembers } from '../../utils/permissions';
 import MemberFinancialSummary from './MemberFinancialSummary';
 import SetPasswordModal from './SetPasswordModal';
 import EditFamilyMemberModal from './EditFamilyMemberModal';
@@ -451,7 +452,15 @@ const MemberManagement: React.FC = () => {
                     <Button variant="secondary" className="text-xs py-1 px-2 w-full" onClick={() => handleEditClick(member)}>Edit</Button>
                   </td>
                   <td className="py-2 px-4">
-                    <Button variant="danger" className="text-xs py-1 px-2 w-full" onClick={() => window.confirm('Are you sure?') && deleteMember(member.id)}>Delete</Button>
+                    <Button 
+                      variant="danger" 
+                      className="text-xs py-1 px-2 w-full" 
+                      onClick={() => window.confirm('Are you sure?') && deleteMember(member.id)}
+                      disabled={!canDeleteMembers(currentUser)}
+                      title={!canDeleteMembers(currentUser) ? "Only Full Admins and Super Admins can delete members" : "Delete member"}
+                    >
+                      Delete
+                    </Button>
                   </td>
                 </tr>
               ))
