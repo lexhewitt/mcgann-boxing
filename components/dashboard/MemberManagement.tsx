@@ -410,6 +410,20 @@ const MemberManagement: React.FC = () => {
                     </a>
                   </td>
                   <td className="py-2 px-4">
+                    <Button 
+                      variant="secondary" 
+                      className="text-xs py-1 px-2 w-full" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMemberForPassword(member);
+                        setIsPasswordModalOpen(true);
+                      }}
+                      title="Set or reset password"
+                    >
+                      Set Password
+                    </Button>
+                  </td>
+                  <td className="py-2 px-4">
                     <Button variant="secondary" className="text-xs py-1 px-2 w-full" onClick={() => handleEditClick(member)}>Edit</Button>
                   </td>
                   <td className="py-2 px-4">
@@ -419,7 +433,7 @@ const MemberManagement: React.FC = () => {
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="text-center py-8 text-gray-400">
+                <td colSpan={10} className="text-center py-8 text-gray-400">
                   No members found matching your search.
                 </td>
               </tr>
