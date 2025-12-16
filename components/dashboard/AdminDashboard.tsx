@@ -17,6 +17,7 @@ import AdminManagement from './AdminManagement';
 import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { canManageAdmins } from '../../utils/permissions';
 
 type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp' | 'backups' | 'admin-management';
 

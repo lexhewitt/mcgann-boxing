@@ -16,3 +16,4 @@ CREATE INDEX IF NOT EXISTS idx_coaches_email ON coaches(email);
 -- Note: Existing users will have NULL password_hash
 -- They will need to set a password on first login or via admin reset
 
+

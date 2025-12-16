@@ -76,3 +76,4 @@ SELECT
    JOIN coach_slots cs ON ca.slot_id = cs.id 
    WHERE cs.coach_id = 'c2') as total_appointments;
 
+

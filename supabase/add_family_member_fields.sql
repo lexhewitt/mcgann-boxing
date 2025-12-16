@@ -9,3 +9,4 @@ ADD COLUMN IF NOT EXISTS ability text;
 ALTER TABLE family_members 
 ADD COLUMN IF NOT EXISTS is_carded boolean default false;
 
+

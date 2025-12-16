@@ -16,3 +16,4 @@ SET whatsapp_auto_reply_enabled = true
 WHERE whatsapp_auto_reply_enabled IS NULL;
 
 
+

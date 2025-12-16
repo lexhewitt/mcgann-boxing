@@ -114,3 +114,4 @@ Sends a WhatsApp message from the coach dashboard.
 - **Simple**: Easy-to-use toggle switch and message composer
 
 
+

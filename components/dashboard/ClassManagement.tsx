@@ -1,10 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
 import Button from '../ui/Button';
 import { GymClass } from '../../types';
 import AddClassModal from './AddClassModal';
 import ClassCreationWizard from './ClassCreationWizard';
 import EditClassModal from './EditClassModal';
+import { canDeleteClasses } from '../../utils/permissions';
 
 const ClassManagement: React.FC = () => {
   const { classes, coaches, deleteClass } = useData();

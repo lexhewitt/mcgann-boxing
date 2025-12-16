@@ -63,3 +63,4 @@ If you haven't run the migration yet:
 The migration is **idempotent** (safe to run multiple times) - it uses `ADD COLUMN IF NOT EXISTS`.
 
 
+

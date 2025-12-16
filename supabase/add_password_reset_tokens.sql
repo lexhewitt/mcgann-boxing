@@ -18,3 +18,4 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_toke
 -- Clean up expired tokens (optional: can be run periodically)
 -- DELETE FROM password_reset_tokens WHERE expires_at < now() OR used = true;
 
+

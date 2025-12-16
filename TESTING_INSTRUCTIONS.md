@@ -84,3 +84,4 @@ When working correctly, you should see:
 - ✅ Booking link includes correct coach ID and calendar view
 
 
+

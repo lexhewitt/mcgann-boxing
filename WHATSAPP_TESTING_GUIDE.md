@@ -492,3 +492,4 @@ gcloud logging read "resource.type=cloud_run_revision" --limit 50 --format json
 6. ✅ Ready for production!
 
 
+

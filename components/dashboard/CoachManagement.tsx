@@ -9,6 +9,7 @@ import { Coach, UserRole } from '../../types';
 import AddCoachModal from './AddCoachModal';
 import CoachSetupWizard from './CoachSetupWizard';
 import SetPasswordModal from './SetPasswordModal';
+import { canDeleteCoaches } from '../../utils/permissions';
 
 interface EditCoachModalProps {
   isOpen: boolean;

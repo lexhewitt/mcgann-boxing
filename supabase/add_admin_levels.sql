@@ -36,3 +36,4 @@ WHERE email = 'lexhewitt@gmail.com';
 CREATE INDEX IF NOT EXISTS idx_coaches_admin_level ON coaches(admin_level);
 CREATE INDEX IF NOT EXISTS idx_coaches_role_admin ON coaches(role, admin_level);
 
+
