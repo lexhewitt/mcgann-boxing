@@ -13,11 +13,12 @@ import FinancialsDashboard from './FinancialsDashboard';
 import CoachFinancialSummary from './CoachFinancialSummary';
 import AdminWhatsAppPanel from './AdminWhatsAppPanel';
 import BackupManagement from './BackupManagement';
+import AdminManagement from './AdminManagement';
 import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 
-type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp' | 'backups';
+type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp' | 'backups' | 'admin-management';
 
 interface AdminDashboardProps {
   setViewAsCoach: (coach: Coach | null) => void;
@@ -85,6 +86,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
         return <NotificationsPanel user={currentUser} />;
       case 'backups':
         return <BackupManagement />;
+      case 'admin-management':
+        return <AdminManagement />;
       default:
         return null;
     }
@@ -137,6 +140,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='whatsapp' label="WhatsApp" />
             <TabButton tabName='system' label="System Status" />
             <TabButton tabName='backups' label="Backups" />
+            {canManageAdmins(currentUser) && <TabButton tabName='admin-management' label="Admin Management" />}
             <TabButton tabName='notifications' label="Notifications" count={totalPendingNotifications} />
             <TabButton tabName='activity' label="Activity Log" />
         </div>
