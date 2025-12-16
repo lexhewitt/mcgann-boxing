@@ -16,7 +16,7 @@ const SignupPage: React.FC = () => {
     confirmPassword: '',
     dob: '',
     sex: 'M' as 'M' | 'F',
-    ability: 'Novice' as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
+    ability: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
     bio: '',
     coachId: null as string | null,
   });
@@ -181,7 +181,7 @@ const SignupPage: React.FC = () => {
               onChange={handleChange} 
               className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
             >
-              <option value="Novice">Novice</option>
+              <option value="Beginner">Beginner</option>
               <option value="Intermediate">Intermediate</option>
               <option value="Advanced">Advanced</option>
               <option value="Competitive">Competitive</option>
@@ -198,7 +198,7 @@ const SignupPage: React.FC = () => {
                 type="button"
                 variant="secondary"
                 className="text-xs py-1 px-3"
-                onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Novice' }])}
+                onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Beginner' }])}
               >
                 + Add Child
               </Button>
@@ -261,7 +261,7 @@ const SignupPage: React.FC = () => {
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">Ability Level (Optional)</label>
                     <select 
-                      value={fm.ability || 'Novice'}
+                      value={fm.ability || 'Beginner'}
                       onChange={(e) => {
                         const updated = [...familyMembers];
                         updated[index].ability = e.target.value;
@@ -269,7 +269,7 @@ const SignupPage: React.FC = () => {
                       }}
                       className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
                     >
-                      <option value="Novice">Novice</option>
+                      <option value="Beginner">Beginner</option>
                       <option value="Intermediate">Intermediate</option>
                       <option value="Advanced">Advanced</option>
                       <option value="Competitive">Competitive</option>

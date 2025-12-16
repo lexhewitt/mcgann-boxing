@@ -17,7 +17,7 @@ export interface Member extends User {
   role: UserRole.MEMBER;
   dob: string; // Date of Birth in 'YYYY-MM-DD' format
   sex: 'M' | 'F';
-  ability: 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive';
+  ability: 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive';
   bio: string;
   coachId: string | null;
   isCarded?: boolean;
@@ -45,7 +45,7 @@ export interface FamilyMember {
   parentId: string;
   name: string;
   dob: string; // Date of Birth in 'YYYY-MM-DD' format
-  ability?: 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive';
+  ability?: 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive';
   isCarded?: boolean;
 }
 

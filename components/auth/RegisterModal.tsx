@@ -23,7 +23,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     confirmPassword: '',
     dob: '',
     sex: 'M',
-    ability: 'Novice',
+    ability: 'Beginner',
     bio: '',
     coachId: null as string | null,
   });
@@ -91,7 +91,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         password: formData.password,
         dob: formData.dob,
         sex: formData.sex as 'M' | 'F',
-        ability: formData.ability as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
+        ability: formData.ability as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
         bio: formData.bio,
         membershipStatus: 'PAYG',
         coachId: formData.coachId,
@@ -107,7 +107,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         confirmPassword: '',
         dob: '',
         sex: 'M',
-        ability: 'Novice',
+        ability: 'Beginner',
         bio: '',
         coachId: null,
       });
@@ -149,7 +149,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Ability Level</label>
             <select name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-                <option value="Novice">Novice</option>
+                <option value="Beginner">Beginner</option>
                 <option value="Intermediate">Intermediate</option>
                 <option value="Advanced">Advanced</option>
                 <option value="Competitive">Competitive</option>
@@ -166,7 +166,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
               type="button"
               variant="secondary"
               className="text-xs py-1 px-3"
-              onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Novice' }])}
+              onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Beginner' }])}
             >
               + Add Child
             </Button>
@@ -229,7 +229,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Ability Level (Optional)</label>
                   <select 
-                    value={fm.ability || 'Novice'}
+                    value={fm.ability || 'Beginner'}
                     onChange={(e) => {
                       const updated = [...familyMembers];
                       updated[index].ability = e.target.value;
@@ -237,7 +237,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
                     }}
                     className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
                   >
-                    <option value="Novice">Novice</option>
+                    <option value="Beginner">Beginner</option>
                     <option value="Intermediate">Intermediate</option>
                     <option value="Advanced">Advanced</option>
                     <option value="Competitive">Competitive</option>

@@ -24,7 +24,7 @@ const EditFamilyMemberModal: React.FC<EditFamilyMemberModalProps> = ({ isOpen, o
     if (familyMember) {
       setFormData({
         ...familyMember,
-        ability: familyMember.ability || 'Novice',
+        ability: familyMember.ability || 'Beginner',
         isCarded: familyMember.isCarded || false,
       });
     }
@@ -99,11 +99,11 @@ const EditFamilyMemberModal: React.FC<EditFamilyMemberModalProps> = ({ isOpen, o
               <select 
                 id="edit-fm-ability" 
                 name="ability" 
-                value={formData.ability || 'Novice'} 
+                value={formData.ability || 'Beginner'} 
                 onChange={handleChange} 
                 className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
               >
-                <option value="Novice">Novice</option>
+                <option value="Beginner">Beginner</option>
                 <option value="Intermediate">Intermediate</option>
                 <option value="Advanced">Advanced</option>
                 <option value="Competitive">Competitive</option>

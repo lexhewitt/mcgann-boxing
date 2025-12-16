@@ -24,7 +24,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
     email: '',
     dob: '',
     sex: 'M' as 'M' | 'F',
-    ability: 'Novice' as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
+    ability: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
     bio: '',
     coachId: null,
     isCarded: false,
@@ -109,7 +109,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
         <div>
           <label htmlFor="add-ability" className="block text-sm font-medium text-gray-300 mb-1">Ability</label>
           <select id="add-ability" name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-            <option>Novice</option>
+            <option>Beginner</option>
             <option>Intermediate</option>
             <option>Advanced</option>
             <option>Competitive</option>
@@ -218,7 +218,7 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
         <div>
           <label htmlFor="edit-ability" className="block text-sm font-medium text-gray-300 mb-1">Ability</label>
           <select id="edit-ability" name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-            <option>Novice</option>
+            <option>Beginner</option>
             <option>Intermediate</option>
             <option>Advanced</option>
             <option>Competitive</option>
@@ -398,7 +398,7 @@ const MemberManagement: React.FC = () => {
                   </td>
                   <td className="py-2 px-4">
                     <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                      member.ability === 'Novice' ? 'bg-blue-500' :
+                      member.ability === 'Beginner' ? 'bg-blue-500' :
                       member.ability === 'Intermediate' ? 'bg-yellow-500' :
                       member.ability === 'Advanced' ? 'bg-orange-500' :
                       member.ability === 'Competitive' ? 'bg-red-500' :
@@ -526,7 +526,7 @@ const MemberManagement: React.FC = () => {
                       <td className="py-2 px-4">{age} years</td>
                       <td className="py-2 px-4">
                         <span className={`px-2 py-1 text-xs font-semibold rounded ${
-                          fm.ability === 'Novice' ? 'bg-blue-500' :
+                          fm.ability === 'Beginner' ? 'bg-blue-500' :
                           fm.ability === 'Intermediate' ? 'bg-yellow-500' :
                           fm.ability === 'Advanced' ? 'bg-orange-500' :
                           fm.ability === 'Competitive' ? 'bg-red-500' :

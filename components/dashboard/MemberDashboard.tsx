@@ -354,7 +354,7 @@ const MemberDashboard: React.FC = () => {
                                         onChange={handleInputChange} 
                                         className="w-full bg-brand-dark p-2 rounded text-white"
                                     >
-                                        <option>Novice</option>
+                                        <option>Beginner</option>
                                         <option>Intermediate</option>
                                         <option>Advanced</option>
                                         <option>Competitive</option>

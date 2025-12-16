@@ -18,7 +18,7 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
   const { currentUser } = useAuth();
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
-  const [ability, setAbility] = useState<'Novice' | 'Intermediate' | 'Advanced' | 'Competitive'>('Novice');
+  const [ability, setAbility] = useState<'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive'>('Beginner');
   const [isCarded, setIsCarded] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,7 +55,7 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
     // Reset form and close
     setName('');
     setDob('');
-    setAbility('Novice');
+    setAbility('Beginner');
     setIsCarded(false);
     onClose();
   };
@@ -86,10 +86,10 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
           <select 
             id="child-ability" 
             value={ability} 
-            onChange={(e) => setAbility(e.target.value as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive')} 
+            onChange={(e) => setAbility(e.target.value as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive')} 
             className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
           >
-            <option value="Novice">Novice</option>
+            <option value="Beginner">Beginner</option>
             <option value="Intermediate">Intermediate</option>
             <option value="Advanced">Advanced</option>
             <option value="Competitive">Competitive</option>
