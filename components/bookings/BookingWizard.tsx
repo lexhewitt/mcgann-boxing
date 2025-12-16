@@ -58,11 +58,12 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ isMemberMode = false }) =
   const [selectedItem, setSelectedItem] = useState<BookableItem | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   
-  // Step 4: Participant details
+  // Step 4: Participant details (for members, select from account/family)
   const [participantName, setParticipantName] = useState('');
   const [participantDob, setParticipantDob] = useState('');
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>('');
   
-  // Step 5: Contact info
+  // Step 5: Contact info (pre-filled for members)
   const [contactName, setContactName] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -79,6 +80,33 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ isMemberMode = false }) =
     today.setHours(0, 0, 0, 0);
     return today;
   }, []);
+
+  // Pre-fill member info when in member mode
+  useEffect(() => {
+    if (isMemberMode && currentUser) {
+      setContactName(currentUser.name);
+      setContactEmail(currentUser.email);
+      // Phone might not be available, so leave it empty
+    }
+  }, [isMemberMode, currentUser]);
+
+  // Get available participants for member mode
+  const availableParticipants = useMemo(() => {
+    if (!isMemberMode || !currentUser) return [];
+    const memberAsParticipant = currentUser as Member;
+    const memberFamily = familyMembers.filter(fm => fm.parentId === currentUser.id);
+    return [memberAsParticipant, ...memberFamily];
+  }, [isMemberMode, currentUser, familyMembers]);
+
+  // Auto-select first participant when in member mode
+  useEffect(() => {
+    if (isMemberMode && availableParticipants.length > 0 && !selectedParticipantId) {
+      const firstParticipant = availableParticipants[0];
+      setSelectedParticipantId(firstParticipant.id);
+      setParticipantName(firstParticipant.name);
+      setParticipantDob(firstParticipant.dob);
+    }
+  }, [isMemberMode, availableParticipants, selectedParticipantId]);
 
   // Filter items by selected coach and service type
   const classItems = useMemo(() => {
