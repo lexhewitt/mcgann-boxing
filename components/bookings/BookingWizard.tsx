@@ -1,10 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
-import { CoachSlot, SlotType, GuestBooking, Coach } from '../../types';
+import { useAuth } from '../../context/AuthContext';
+import { CoachSlot, SlotType, GuestBooking, Coach, Member, FamilyMember } from '../../types';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { handleGuestCheckout, finalizeStripeCheckoutSession } from '../../services/stripeService';
-import { getNextDateForDay } from '../../utils/time';
+import { handleGuestCheckout, finalizeStripeCheckoutSession, handleStripeCheckout } from '../../services/stripeService';
+import { getNextDateForDay, getNextClassDateTime } from '../../utils/time';
+import { calculateAge } from '../../utils/helpers';
 
 interface BookableItem {
   id: string;
@@ -38,8 +40,13 @@ const formatDate = (date: Date) =>
 const formatTime = (date: Date) =>
   date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-const BookingWizard: React.FC = () => {
-  const { classes, coaches, coachSlots, coachAvailability, unavailableSlots, coachAppointments, guestBookings, addGuestBooking } = useData();
+interface BookingWizardProps {
+  isMemberMode?: boolean;
+}
+
+const BookingWizard: React.FC<BookingWizardProps> = ({ isMemberMode = false }) => {
+  const { classes, coaches, coachSlots, coachAvailability, unavailableSlots, coachAppointments, guestBookings, addGuestBooking, addBooking, members, familyMembers } = useData();
+  const { currentUser } = useAuth();
   
   // Step 1: Coach selection
   const [selectedCoach, setSelectedCoach] = useState<Coach | null>(null);
@@ -420,50 +427,130 @@ const BookingWizard: React.FC = () => {
     if (!selectedItem) return;
     setProcessing(true);
     
-    const billingFrequency = paymentMethod === 'WEEKLY' ? 'WEEKLY' : 
-                            paymentMethod === 'MONTHLY' ? 'MONTHLY' : 
-                            paymentMethod === 'PER_SESSION' ? undefined : undefined;
-    
-    const guestPayload = {
-      type: selectedItem.type,
-      referenceId: selectedItem.classId || selectedItem.slotId,
-      title: selectedItem.title,
-      date: selectedItem.date,
-      participantName,
-      contactName,
-      contactEmail,
-      contactPhone,
-      paymentMethod,
-      billingFrequency,
-    };
-    localStorage.setItem('pendingGuestBooking', JSON.stringify(guestPayload));
+    if (isMemberMode && currentUser) {
+      // Member booking flow
+      const participant = availableParticipants.find(p => p.id === selectedParticipantId);
+      if (!participant) {
+        alert('Please select a participant');
+        setProcessing(false);
+        return;
+      }
 
-    // For generated slots from availability (no slotId), we need to pass the date/time info
-    // The server will handle creating the slot if needed
-    const result = await handleGuestCheckout({
-      price: selectedItem.price,
-      className: selectedItem.type === 'CLASS' ? selectedItem.title : undefined,
-      classId: selectedItem.classId,
-      slotTitle: selectedItem.type !== 'CLASS' ? selectedItem.title : undefined,
-      slotId: selectedItem.slotId, // undefined for generated slots from availability
-      coachId: selectedItem.coachId,
-      sessionStart: selectedItem.date.toISOString(),
-      guestBooking: {
+      if (selectedItem.type === 'CLASS' && selectedItem.classId) {
+        // Book a class
+        const gymClass = classes.find(c => c.id === selectedItem.classId);
+        if (!gymClass) {
+          alert('Class not found');
+          setProcessing(false);
+          return;
+        }
+
+        const sessionDate = getNextClassDateTime(gymClass);
+        const pendingBooking = {
+          memberId: currentUser.id,
+          participantId: selectedParticipantId,
+          classId: selectedItem.classId,
+          sessionStart: sessionDate.toISOString(),
+          summary: {
+            type: 'CLASS',
+            title: gymClass.name,
+            schedule: `${gymClass.day} ${gymClass.time}`,
+            coachName: selectedCoach?.name,
+            participantName: participant.name,
+            price: gymClass.price,
+          },
+        };
+        localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
+
+        const paymentResult = await handleStripeCheckout(gymClass, participant, currentUser.id, {
+          sessionStart: sessionDate.toISOString(),
+          onSessionCreated: (sessionId) => {
+            pendingBooking.stripeSessionId = sessionId;
+            localStorage.setItem('pendingBooking', JSON.stringify(pendingBooking));
+          },
+        });
+
+        if (paymentResult.error) {
+          localStorage.removeItem('pendingBooking');
+          setProcessing(false);
+          alert(`Booking failed: ${paymentResult.error}`);
+        }
+      } else {
+        // Book a private/group session - use guest checkout for now
+        const billingFrequency = paymentMethod === 'WEEKLY' ? 'WEEKLY' : 
+                                paymentMethod === 'MONTHLY' ? 'MONTHLY' : 
+                                paymentMethod === 'PER_SESSION' ? undefined : undefined;
+        
+        const result = await handleGuestCheckout({
+          price: selectedItem.price,
+          className: undefined,
+          classId: undefined,
+          slotTitle: selectedItem.title,
+          slotId: selectedItem.slotId,
+          coachId: selectedItem.coachId,
+          sessionStart: selectedItem.date.toISOString(),
+          guestBooking: {
+            participantName: participant.name,
+            participantDob: participant.dob,
+            contactName: currentUser.name,
+            contactEmail: currentUser.email,
+            contactPhone: contactPhone || undefined,
+          },
+          paymentMethod,
+          billingFrequency,
+          successPath: '/',
+        });
+
+        if (!result.success && result.error) {
+          alert(result.error);
+          setProcessing(false);
+        }
+      }
+    } else {
+      // Guest booking flow
+      const billingFrequency = paymentMethod === 'WEEKLY' ? 'WEEKLY' : 
+                              paymentMethod === 'MONTHLY' ? 'MONTHLY' : 
+                              paymentMethod === 'PER_SESSION' ? undefined : undefined;
+      
+      const guestPayload = {
+        type: selectedItem.type,
+        referenceId: selectedItem.classId || selectedItem.slotId,
+        title: selectedItem.title,
+        date: selectedItem.date,
         participantName,
-        participantDob: participantDob || undefined,
         contactName,
         contactEmail,
         contactPhone,
-      },
-      paymentMethod,
-      billingFrequency,
-      successPath: '/book',
-    });
+        paymentMethod,
+        billingFrequency,
+      };
+      localStorage.setItem('pendingGuestBooking', JSON.stringify(guestPayload));
 
-    if (!result.success && result.error) {
-      alert(result.error);
-      localStorage.removeItem('pendingGuestBooking');
-      setProcessing(false);
+      const result = await handleGuestCheckout({
+        price: selectedItem.price,
+        className: selectedItem.type === 'CLASS' ? selectedItem.title : undefined,
+        classId: selectedItem.classId,
+        slotTitle: selectedItem.type !== 'CLASS' ? selectedItem.title : undefined,
+        slotId: selectedItem.slotId,
+        coachId: selectedItem.coachId,
+        sessionStart: selectedItem.date.toISOString(),
+        guestBooking: {
+          participantName,
+          participantDob: participantDob || undefined,
+          contactName,
+          contactEmail,
+          contactPhone,
+        },
+        paymentMethod,
+        billingFrequency,
+        successPath: '/book',
+      });
+
+      if (!result.success && result.error) {
+        alert(result.error);
+        localStorage.removeItem('pendingGuestBooking');
+        setProcessing(false);
+      }
     }
   };
 
@@ -471,8 +558,14 @@ const BookingWizard: React.FC = () => {
     if (step === 1) return Boolean(selectedCoach);
     if (step === 2) return Boolean(selectedServiceType);
     if (step === 3) return Boolean(selectedItem);
-    if (step === 4) return participantName.length > 1;
-    if (step === 5) return contactName && contactEmail && contactPhone;
+    if (step === 4) {
+      if (isMemberMode) return Boolean(selectedParticipantId);
+      return participantName.length > 1;
+    }
+    if (step === 5) {
+      if (isMemberMode) return true; // Contact info is pre-filled
+      return contactName && contactEmail && contactPhone;
+    }
     if (step === 6) return Boolean(paymentMethod);
     return true;
   };
@@ -769,9 +862,49 @@ const BookingWizard: React.FC = () => {
             <p className="text-lg font-bold text-brand-red mt-3">£{selectedItem.price.toFixed(2)}</p>
           </div>
           <div className="flex-1 space-y-4">
-            <h3 className="text-white text-xl font-semibold">Enter participant details</h3>
-            <Input label="Participant name" id="participant-name" value={participantName} onChange={(e) => setParticipantName(e.target.value)} />
-            <Input label="Participant date of birth (optional)" id="participant-dob" type="date" value={participantDob} onChange={(e) => setParticipantDob(e.target.value)} />
+            <h3 className="text-white text-xl font-semibold">
+              {isMemberMode ? 'Select participant' : 'Enter participant details'}
+            </h3>
+            {isMemberMode && availableParticipants.length > 0 ? (
+              <>
+                <div>
+                  <label htmlFor="participant-select" className="block text-sm font-medium text-gray-300 mb-2">
+                    Who is this booking for?
+                  </label>
+                  <select
+                    id="participant-select"
+                    value={selectedParticipantId}
+                    onChange={(e) => {
+                      setSelectedParticipantId(e.target.value);
+                      const participant = availableParticipants.find(p => p.id === e.target.value);
+                      if (participant) {
+                        setParticipantName(participant.name);
+                        setParticipantDob(participant.dob);
+                      }
+                    }}
+                    className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
+                  >
+                    {availableParticipants.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} {p.dob ? `(Age: ${calculateAge(p.dob)})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {selectedParticipantId && (
+                  <div className="bg-brand-dark/40 p-3 rounded-lg">
+                    <p className="text-sm text-gray-300">
+                      Booking for: <span className="font-semibold text-white">{participantName}</span>
+                    </p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <Input label="Participant name" id="participant-name" value={participantName} onChange={(e) => setParticipantName(e.target.value)} />
+                <Input label="Participant date of birth (optional)" id="participant-dob" type="date" value={participantDob} onChange={(e) => setParticipantDob(e.target.value)} />
+              </>
+            )}
             <div className="flex justify-between">
               <Button variant="secondary" onClick={goBack}>Back</Button>
               <Button onClick={goNext} disabled={!canAdvanceStep()}>Next</Button>
@@ -785,9 +918,25 @@ const BookingWizard: React.FC = () => {
         <div className="space-y-4 bg-black/20 rounded-3xl p-6">
           <h2 className="text-xl font-semibold text-white">Your contact details</h2>
           <p className="text-sm text-gray-400">We'll send confirmations and reminders to this contact.</p>
-          <Input label="Your name" id="contact-name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
-          <Input label="Email" id="contact-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
-          <Input label="Mobile number" id="contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+          {isMemberMode ? (
+            <div className="space-y-4">
+              <div className="bg-brand-dark/40 p-4 rounded-lg">
+                <p className="text-sm text-gray-400 mb-1">Name</p>
+                <p className="text-white font-semibold">{contactName}</p>
+              </div>
+              <div className="bg-brand-dark/40 p-4 rounded-lg">
+                <p className="text-sm text-gray-400 mb-1">Email</p>
+                <p className="text-white font-semibold">{contactEmail}</p>
+              </div>
+              <Input label="Mobile number (optional)" id="contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+            </div>
+          ) : (
+            <>
+              <Input label="Your name" id="contact-name" value={contactName} onChange={(e) => setContactName(e.target.value)} />
+              <Input label="Email" id="contact-email" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} />
+              <Input label="Mobile number" id="contact-phone" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} />
+            </>
+          )}
           <div className="flex justify-between">
             <Button variant="secondary" onClick={goBack}>Back</Button>
             <Button onClick={goNext} disabled={!canAdvanceStep()}>Next</Button>

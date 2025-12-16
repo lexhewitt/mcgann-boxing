@@ -55,13 +55,9 @@ const MemberBookingHub: React.FC = () => {
             : 'Use this if you need to pay for someone who is not on your account yet.'}
         </p>
       </div>
-      {mode === 'member' ? (
-        <ClassSchedule viewMode="weekly" />
-      ) : (
-        <div className="bg-brand-gray p-4 rounded-3xl shadow-xl">
-          <BookingWizard />
-        </div>
-      )}
+      <div className="bg-brand-gray p-4 rounded-3xl shadow-xl">
+        <BookingWizard isMemberMode={mode === 'member'} />
+      </div>
     </div>
   );
 };
