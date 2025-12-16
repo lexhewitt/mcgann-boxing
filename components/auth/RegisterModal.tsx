@@ -27,7 +27,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     bio: '',
     coachId: null as string | null,
   });
-  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; dob: string; ability?: string; isCarded?: boolean }>>([]);
+  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; dob: string; ability?: string }>>([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -166,7 +166,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
               type="button"
               variant="secondary"
               className="text-xs py-1 px-3"
-              onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Novice', isCarded: false }])}
+              onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Novice' }])}
             >
               + Add Child
             </Button>

@@ -6,6 +6,7 @@ import Button from '../ui/Button';
 import Modal from '../ui/Modal';
 import Input from '../ui/Input';
 import { calculateAge } from '../../utils/helpers';
+import { UserRole } from '../../types';
 
 interface AddFamilyMemberModalProps {
   isOpen: boolean;
@@ -94,16 +95,18 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
             <option value="Competitive">Competitive</option>
           </select>
         </div>
-        <div className="flex items-center gap-2">
-          <input 
-            type="checkbox" 
-            id="child-isCarded"
-            checked={isCarded}
-            onChange={(e) => setIsCarded(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
-          />
-          <label htmlFor="child-isCarded" className="text-sm text-gray-300">Mark as Carded Boxer (Optional)</label>
-        </div>
+        {currentUser?.role === UserRole.ADMIN && (
+          <div className="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="child-isCarded"
+              checked={isCarded}
+              onChange={(e) => setIsCarded(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
+            />
+            <label htmlFor="child-isCarded" className="text-sm text-gray-300">Mark as Carded Boxer (Admin Only)</label>
+          </div>
+        )}
         <div className="flex justify-end gap-4 pt-4">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit">Add Member</Button>
