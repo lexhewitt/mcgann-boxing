@@ -99,16 +99,22 @@ const AdminManagement: React.FC = () => {
                     {coach.role === UserRole.ADMIN && (
                       <div>
                         {coach.adminLevel === AdminLevel.SUPERADMIN && (
-                          <div>✓ Can delete everything</div>
-                          <div>✓ Can manage admins</div>
+                          <>
+                            <div>✓ Can delete everything</div>
+                            <div>✓ Can manage admins</div>
+                          </>
                         )}
                         {coach.adminLevel === AdminLevel.FULL_ADMIN && (
-                          <div>✓ Can delete everything</div>
-                          <div>✗ Cannot manage admins</div>
+                          <>
+                            <div>✓ Can delete everything</div>
+                            <div>✗ Cannot manage admins</div>
+                          </>
                         )}
                         {coach.adminLevel === AdminLevel.STANDARD_ADMIN && (
-                          <div>✗ Cannot delete</div>
-                          <div>✗ Cannot manage admins</div>
+                          <>
+                            <div>✗ Cannot delete</div>
+                            <div>✗ Cannot manage admins</div>
+                          </>
                         )}
                         {!coach.adminLevel && (
                           <div>✗ No admin permissions</div>
