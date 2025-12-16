@@ -745,6 +745,184 @@ apiRouter.post('/auth/set-password', express.json(), async (req, res) => {
   }
 });
 
+// POST /server-api/auth/forgot-password - Request password reset
+apiRouter.post('/auth/forgot-password', express.json(), async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Check if user exists (member or coach)
+    const { data: member } = await supabase
+      .from('members')
+      .select('id, name, email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    const { data: coach } = await supabase
+      .from('coaches')
+      .select('id, name, email')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    const user = member || coach;
+    
+    // Always return success (security: don't reveal if email exists)
+    if (!user) {
+      return res.json({ success: true, message: 'If an account exists with this email, a reset link has been sent.' });
+    }
+
+    // Generate reset token
+    const crypto = require('crypto');
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
+
+    // Store token in database
+    const { error: tokenError } = await supabase
+      .from('password_reset_tokens')
+      .insert({
+        id: `prt-${Date.now()}`,
+        user_id: user.id,
+        user_type: member ? 'member' : 'coach',
+        token: resetToken,
+        expires_at: expiresAt.toISOString(),
+        created_at: new Date().toISOString(),
+      });
+
+    if (tokenError) {
+      console.error('Supabase: insert reset token failed', tokenError);
+      return res.status(500).json({ error: 'Failed to generate reset token' });
+    }
+
+    // Send reset email
+    const baseUrl = process.env.SITE_URL || 'https://mcgann-boxing-2coodfhbmq-nw.a.run.app';
+    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+
+    const emailService = require('./services/emailService');
+    await emailService.sendPasswordResetEmail({
+      email: user.email,
+      userName: user.name,
+      resetUrl,
+    });
+
+    return res.json({ success: true, message: 'If an account exists with this email, a reset link has been sent.' });
+  } catch (error) {
+    console.error('[Auth] Forgot password error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /server-api/auth/validate-reset-token - Validate reset token
+apiRouter.post('/auth/validate-reset-token', express.json(), async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ error: 'Token is required', valid: false });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured', valid: false });
+    }
+
+    const { data: tokenRecord, error } = await supabase
+      .from('password_reset_tokens')
+      .select('id, user_id, user_type, expires_at, used')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (error || !tokenRecord) {
+      return res.json({ valid: false, error: 'Invalid reset token' });
+    }
+
+    if (tokenRecord.used) {
+      return res.json({ valid: false, error: 'This reset link has already been used' });
+    }
+
+    const expiresAt = new Date(tokenRecord.expires_at);
+    if (expiresAt < new Date()) {
+      return res.json({ valid: false, error: 'This reset link has expired' });
+    }
+
+    return res.json({ valid: true });
+  } catch (error) {
+    console.error('[Auth] Validate token error:', error);
+    return res.status(500).json({ error: 'Internal server error', valid: false });
+  }
+});
+
+// POST /server-api/auth/reset-password - Reset password with token
+apiRouter.post('/auth/reset-password', express.json(), async (req, res) => {
+  try {
+    const { token, password } = req.body;
+    if (!token || !password) {
+      return res.status(400).json({ error: 'Token and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Validate token
+    const { data: tokenRecord, error: tokenError } = await supabase
+      .from('password_reset_tokens')
+      .select('id, user_id, user_type, expires_at, used')
+      .eq('token', token)
+      .maybeSingle();
+
+    if (tokenError || !tokenRecord) {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+
+    if (tokenRecord.used) {
+      return res.status(400).json({ error: 'This reset link has already been used' });
+    }
+
+    const expiresAt = new Date(tokenRecord.expires_at);
+    if (expiresAt < new Date()) {
+      return res.status(400).json({ error: 'This reset link has expired' });
+    }
+
+    // Hash new password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Update password
+    const tableName = tokenRecord.user_type === 'member' ? 'members' : 'coaches';
+    const { error: updateError } = await supabase
+      .from(tableName)
+      .update({ password_hash: passwordHash })
+      .eq('id', tokenRecord.user_id);
+
+    if (updateError) {
+      console.error('Supabase: update password failed', updateError);
+      return res.status(500).json({ error: 'Failed to reset password' });
+    }
+
+    // Mark token as used
+    await supabase
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('id', tokenRecord.id);
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Auth] Reset password error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /server-api/stripe-config
 apiRouter.post('/update-transaction', express.json(), async (req, res) => {
   try {

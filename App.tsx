@@ -7,14 +7,18 @@ import Footer from './components/layout/Footer';
 import MainContent from './components/MainContent';
 import LoginModal from './components/auth/LoginModal';
 import RegisterModal from './components/auth/RegisterModal';
+import ForgotPasswordModal from './components/auth/ForgotPasswordModal';
 import BookingWizard from './components/bookings/BookingWizard';
 import SignupPage from './components/auth/SignupPage';
+import ResetPasswordPage from './components/auth/ResetPasswordPage';
 
 const App: React.FC = () => {
   const [isLoginOpen, setLoginOpen] = useState(false);
   const [isRegisterOpen, setRegisterOpen] = useState(false);
+  const [isForgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const isBookingPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/book');
   const isSignupPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/signup');
+  const isResetPasswordPage = typeof window !== 'undefined' && window.location.pathname.startsWith('/reset-password');
 
   const handleSwitchToRegister = () => {
     setLoginOpen(false);
@@ -23,8 +27,19 @@ const App: React.FC = () => {
 
   const handleSwitchToLogin = () => {
     setRegisterOpen(false);
+    setForgotPasswordOpen(false);
     setLoginOpen(true);
   };
+
+  // Listen for forgot password event
+  React.useEffect(() => {
+    const handleOpenForgotPassword = () => {
+      setLoginOpen(false);
+      setForgotPasswordOpen(true);
+    };
+    window.addEventListener('openForgotPassword', handleOpenForgotPassword);
+    return () => window.removeEventListener('openForgotPassword', handleOpenForgotPassword);
+  }, []);
 
   return (
     <DataProvider>
@@ -39,6 +54,8 @@ const App: React.FC = () => {
               <BookingWizard />
             ) : isSignupPage ? (
               <SignupPage />
+            ) : isResetPasswordPage ? (
+              <ResetPasswordPage />
             ) : (
               <MainContent onRegisterClick={() => setRegisterOpen(true)} />
             )}
@@ -54,6 +71,11 @@ const App: React.FC = () => {
           isOpen={isRegisterOpen} 
           onClose={() => setRegisterOpen(false)} 
           onSwitchToLogin={handleSwitchToLogin} 
+        />
+        <ForgotPasswordModal
+          isOpen={isForgotPasswordOpen}
+          onClose={() => setForgotPasswordOpen(false)}
+          onSwitchToLogin={handleSwitchToLogin}
         />
       </AuthProvider>
     </DataProvider>

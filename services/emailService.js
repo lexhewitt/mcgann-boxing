@@ -351,7 +351,89 @@ const sendInvoiceReminder = async (data) => {
   }
 };
 
+/**
+ * Generates HTML for password reset email
+ */
+const generatePasswordResetHTML = (resetUrl, userName) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #dc2626; color: white; padding: 20px; text-align: center; }
+        .content { background-color: #f9f9f9; padding: 30px; }
+        .button { display: inline-block; background-color: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { text-align: center; color: #666; font-size: 12px; margin-top: 20px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1>Fleetwood Boxing Gym</h1>
+        </div>
+        <div class="content">
+          <h2>Password Reset Request</h2>
+          <p>Hello ${userName || 'there'},</p>
+          <p>We received a request to reset your password. Click the button below to create a new password:</p>
+          <p style="text-align: center;">
+            <a href="${resetUrl}" class="button">Reset Password</a>
+          </p>
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+          <p><strong>This link will expire in 1 hour.</strong></p>
+          <p>If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
+        </div>
+        <div class="footer">
+          <p>Fleetwood Boxing Gym</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+};
+
+/**
+ * Sends a password reset email
+ */
+const sendPasswordResetEmail = async (data) => {
+  try {
+    const emailTransporter = getTransporter();
+    
+    if (!emailTransporter) {
+      // Fallback: log the email
+      console.log('[Email] Password Reset (not sent - Gmail not configured):', {
+        to: data.email,
+        resetUrl: data.resetUrl,
+      });
+      return { success: true, note: 'Email logged (Gmail not configured)' };
+    }
+
+    const mailOptions = {
+      from: `"Fleetwood Boxing Gym" <${process.env.GMAIL_USER}>`,
+      to: data.email,
+      subject: 'Reset Your Password - Fleetwood Boxing Gym',
+      html: generatePasswordResetHTML(data.resetUrl, data.userName),
+      text: `Password Reset Request\n\nHello ${data.userName || 'there'},\n\nWe received a request to reset your password. Click the link below to create a new password:\n\n${data.resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you didn't request a password reset, please ignore this email.`,
+    };
+
+    const info = await emailTransporter.sendMail(mailOptions);
+    console.log('[Email] Password reset email sent:', {
+      to: data.email,
+      messageId: info.messageId,
+    });
+    
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[Email] Failed to send password reset email:', error);
+    return { success: false, error: error.message || 'Unknown error' };
+  }
+};
+
 module.exports = {
   sendMonthlyStatement,
   sendInvoiceReminder,
+  sendPasswordResetEmail,
 };

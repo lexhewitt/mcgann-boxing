@@ -64,6 +64,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onSwitchToRegi
           placeholder="Enter your password"
           autoComplete="current-password"
         />
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => {
+              // Trigger forgot password modal
+              window.dispatchEvent(new CustomEvent('openForgotPassword'));
+            }}
+            className="text-sm text-brand-red hover:underline"
+          >
+            Forgot Password?
+          </button>
+        </div>
         <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading ? 'Logging in...' : 'Login'}
         </Button>
