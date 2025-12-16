@@ -657,7 +657,7 @@ apiRouter.post('/auth/register', express.json(), async (req, res) => {
         role: 'MEMBER',
         dob,
         sex: sex || 'M',
-        ability: ability || 'Beginner',
+        ability: ability || 'Novice',
         bio: bio || '',
         coach_id: coachId || null,
         membership_status: 'PAYG',

@@ -17,6 +17,8 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
   const { currentUser } = useAuth();
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
+  const [ability, setAbility] = useState<'Novice' | 'Intermediate' | 'Advanced' | 'Competitive'>('Novice');
+  const [isCarded, setIsCarded] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -45,11 +47,15 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
       name,
       dob,
       parentId: currentUser.id,
+      ability,
+      isCarded,
     });
     
     // Reset form and close
     setName('');
     setDob('');
+    setAbility('Novice');
+    setIsCarded(false);
     onClose();
   };
 

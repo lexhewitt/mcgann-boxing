@@ -16,7 +16,7 @@ const SignupPage: React.FC = () => {
     confirmPassword: '',
     dob: '',
     sex: 'M' as 'M' | 'F',
-    ability: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
+    ability: 'Novice' as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
     bio: '',
     coachId: null as string | null,
   });
@@ -181,7 +181,7 @@ const SignupPage: React.FC = () => {
               onChange={handleChange} 
               className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
             >
-              <option value="Beginner">Beginner</option>
+              <option value="Novice">Novice</option>
               <option value="Intermediate">Intermediate</option>
               <option value="Advanced">Advanced</option>
               <option value="Competitive">Competitive</option>

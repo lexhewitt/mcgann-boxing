@@ -38,6 +38,7 @@ interface DataContextType {
   addMember: (member: Omit<Member, 'id'>) => Promise<Member>;
   deleteMember: (memberId: string) => void;
   addFamilyMember: (familyMember: Omit<FamilyMember, 'id'>) => void;
+  updateFamilyMember: (familyMember: FamilyMember) => void;
   deleteFamilyMember: (familyMemberId: string) => void;
   updateCoach: (coach: Coach) => Promise<void>;
   addCoach: (coach: Omit<Coach, 'id'>) => Coach;
@@ -1029,6 +1030,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         parent_id: newFamilyMember.parentId,
         name: newFamilyMember.name,
         dob: newFamilyMember.dob,
+        ability: newFamilyMember.ability || null,
+        is_carded: newFamilyMember.isCarded || false,
       });
       
       if (error) {
@@ -1212,7 +1215,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   return (
-    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, refreshData, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, cancelBooking, cancelCoachAppointment, cancelGuestBooking, acknowledgeBookingAlert }}>
+    <DataContext.Provider value={{ coaches, classes, members, familyMembers, bookings, auditLogs, coachAvailability, unavailableSlots, gymAccessLogs, notifications, transactions, coachSlots, coachAppointments, guestBookings, bookingAlerts, refreshData, createClassTransferRequest, acceptClassTransfer, undoClassTransfer, cancelClassTransferRequest, logGymAccess, addAvailabilitySlot, deleteAvailabilitySlot, addUnavailableSlot, deleteUnavailableSlot, addBooking, deleteBooking, updateBooking, toggleAttendance, updateMember, addMember, deleteMember, addFamilyMember, updateFamilyMember, deleteFamilyMember, updateCoach, addCoach, deleteCoach, updateClass, addClass, deleteClass, addTransaction, updateTransaction, bookCoachSlot, addGuestBooking, cancelBooking, cancelCoachAppointment, cancelGuestBooking, acknowledgeBookingAlert }}>
       {children}
     </DataContext.Provider>
   );

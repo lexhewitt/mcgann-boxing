@@ -8,7 +8,9 @@ import { Member, UserRole } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import MemberFinancialSummary from './MemberFinancialSummary';
 import SetPasswordModal from './SetPasswordModal';
+import EditFamilyMemberModal from './EditFamilyMemberModal';
 import { getSupabase } from '../../services/supabaseClient';
+import { calculateAge } from '../../utils/helpers';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -22,7 +24,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
     email: '',
     dob: '',
     sex: 'M' as 'M' | 'F',
-    ability: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
+    ability: 'Novice' as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
     bio: '',
     coachId: null,
     isCarded: false,
@@ -107,7 +109,7 @@ const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
         <div>
           <label htmlFor="add-ability" className="block text-sm font-medium text-gray-300 mb-1">Ability</label>
           <select id="add-ability" name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-            <option>Beginner</option>
+            <option>Novice</option>
             <option>Intermediate</option>
             <option>Advanced</option>
             <option>Competitive</option>
@@ -216,7 +218,7 @@ const EditMemberModal: React.FC<EditMemberModalProps> = ({ isOpen, onClose, memb
         <div>
           <label htmlFor="edit-ability" className="block text-sm font-medium text-gray-300 mb-1">Ability</label>
           <select id="edit-ability" name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-            <option>Beginner</option>
+            <option>Novice</option>
             <option>Intermediate</option>
             <option>Advanced</option>
             <option>Competitive</option>
@@ -294,6 +296,8 @@ const MemberManagement: React.FC = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   const [memberForPassword, setMemberForPassword] = useState<Member | null>(null);
+  const [isFamilyMemberModalOpen, setIsFamilyMemberModalOpen] = useState(false);
+  const [familyMemberToEdit, setFamilyMemberToEdit] = useState<{ familyMember: any; parentName: string } | null>(null);
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -370,6 +374,8 @@ const MemberManagement: React.FC = () => {
           <thead className="bg-black">
             <tr>
               <th className="py-2 px-4 text-left">Name</th>
+              <th className="py-2 px-4 text-left">Ability</th>
+              <th className="py-2 px-4 text-left">Carded</th>
               <th className="py-2 px-4 text-left">Membership</th>
               <th className="py-2 px-4 text-left">Start Date</th>
               <th className="py-2 px-4 text-left">Expiry</th>
@@ -389,6 +395,24 @@ const MemberManagement: React.FC = () => {
                   <td className="py-2 px-4">
                     <div className="font-semibold">{member.name}</div>
                     <div className="text-xs text-gray-400">{member.email}</div>
+                  </td>
+                  <td className="py-2 px-4">
+                    <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                      member.ability === 'Novice' ? 'bg-blue-500' :
+                      member.ability === 'Intermediate' ? 'bg-yellow-500' :
+                      member.ability === 'Advanced' ? 'bg-orange-500' :
+                      member.ability === 'Competitive' ? 'bg-red-500' :
+                      'bg-gray-500'
+                    }`}>
+                      {member.ability}
+                    </span>
+                  </td>
+                  <td className="py-2 px-4">
+                    {member.isCarded ? (
+                      <span className="px-2 py-1 text-xs font-bold rounded bg-brand-red text-white">Carded</span>
+                    ) : (
+                      <span className="text-gray-500 text-xs">No</span>
+                    )}
                   </td>
                   <td className="py-2 px-4">{getMembershipDisplay(member)}</td>
                   <td className="py-2 px-4">{member.membershipStartDate ? new Date(member.membershipStartDate).toLocaleDateString() : 'N/A'}</td>
@@ -433,7 +457,7 @@ const MemberManagement: React.FC = () => {
               ))
             ) : (
               <tr>
-                <td colSpan={10} className="text-center py-8 text-gray-400">
+                <td colSpan={12} className="text-center py-8 text-gray-400">
                   No members found matching your search.
                 </td>
               </tr>
@@ -471,6 +495,90 @@ const MemberManagement: React.FC = () => {
             embedded={true}
           />
         </Modal>
+      )}
+      
+      {/* Family Members Section */}
+      <div className="mt-8 border-t border-gray-700 pt-8">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-white">Family Members ({familyMembers.length})</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-brand-dark text-sm">
+            <thead className="bg-black">
+              <tr>
+                <th className="py-2 px-4 text-left">Name</th>
+                <th className="py-2 px-4 text-left">Parent</th>
+                <th className="py-2 px-4 text-left">Age</th>
+                <th className="py-2 px-4 text-left">Ability</th>
+                <th className="py-2 px-4 text-left">Carded</th>
+                <th className="py-2 px-4 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {familyMembers.length > 0 ? (
+                familyMembers.map(fm => {
+                  const parent = members.find(m => m.id === fm.parentId);
+                  const age = calculateAge(fm.dob);
+                  return (
+                    <tr key={fm.id} className="border-b border-gray-800 hover:bg-gray-800">
+                      <td className="py-2 px-4 font-semibold">{fm.name}</td>
+                      <td className="py-2 px-4">{parent?.name || 'Unknown'}</td>
+                      <td className="py-2 px-4">{age} years</td>
+                      <td className="py-2 px-4">
+                        <span className={`px-2 py-1 text-xs font-semibold rounded ${
+                          fm.ability === 'Novice' ? 'bg-blue-500' :
+                          fm.ability === 'Intermediate' ? 'bg-yellow-500' :
+                          fm.ability === 'Advanced' ? 'bg-orange-500' :
+                          fm.ability === 'Competitive' ? 'bg-red-500' :
+                          'bg-gray-500'
+                        }`}>
+                          {fm.ability || 'Not set'}
+                        </span>
+                      </td>
+                      <td className="py-2 px-4">
+                        {fm.isCarded ? (
+                          <span className="px-2 py-1 text-xs font-bold rounded bg-brand-red text-white">Carded</span>
+                        ) : (
+                          <span className="text-gray-500 text-xs">No</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-4">
+                        <Button 
+                          variant="secondary" 
+                          className="text-xs py-1 px-2" 
+                          onClick={() => {
+                            setFamilyMemberToEdit({ familyMember: fm, parentName: parent?.name || 'Unknown' });
+                            setIsFamilyMemberModalOpen(true);
+                          }}
+                        >
+                          Edit
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-gray-400">
+                    No family members found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {familyMemberToEdit && (
+        <EditFamilyMemberModal
+          isOpen={isFamilyMemberModalOpen}
+          onClose={() => {
+            setIsFamilyMemberModalOpen(false);
+            setFamilyMemberToEdit(null);
+          }}
+          familyMember={familyMemberToEdit.familyMember}
+          parentMemberName={familyMemberToEdit.parentName}
+        />
       )}
     </>
   );

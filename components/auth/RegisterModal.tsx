@@ -23,7 +23,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     confirmPassword: '',
     dob: '',
     sex: 'M',
-    ability: 'Beginner',
+    ability: 'Novice',
     bio: '',
     coachId: null as string | null,
   });
@@ -91,7 +91,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         password: formData.password,
         dob: formData.dob,
         sex: formData.sex as 'M' | 'F',
-        ability: formData.ability as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
+        ability: formData.ability as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive',
         bio: formData.bio,
         membershipStatus: 'PAYG',
         coachId: formData.coachId,
@@ -107,7 +107,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         confirmPassword: '',
         dob: '',
         sex: 'M',
-        ability: 'Beginner',
+        ability: 'Novice',
         bio: '',
         coachId: null,
       });
@@ -149,7 +149,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Ability Level</label>
             <select name="ability" value={formData.ability} onChange={handleChange} className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white">
-                <option value="Beginner">Beginner</option>
+                <option value="Novice">Novice</option>
                 <option value="Intermediate">Intermediate</option>
                 <option value="Advanced">Advanced</option>
                 <option value="Competitive">Competitive</option>
