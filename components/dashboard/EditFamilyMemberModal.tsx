@@ -42,7 +42,7 @@ const EditFamilyMemberModal: React.FC<EditFamilyMemberModalProps> = ({ isOpen, o
     } : null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -52,8 +52,12 @@ const EditFamilyMemberModal: React.FC<EditFamilyMemberModalProps> = ({ isOpen, o
     }
 
     if (formData) {
-      updateFamilyMember(formData);
-      onClose();
+      try {
+        updateFamilyMember(formData);
+        onClose();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update family member');
+      }
     }
   };
 
