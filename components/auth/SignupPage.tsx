@@ -188,6 +188,81 @@ const SignupPage: React.FC = () => {
             </select>
           </div>
 
+          {/* Family Members Section */}
+          <div className="border-t border-gray-700 pt-4 mt-4">
+            <div className="flex justify-between items-center mb-3">
+              <label className="block text-sm font-medium text-gray-300">
+                Family Members (Optional)
+              </label>
+              <Button
+                type="button"
+                variant="secondary"
+                className="text-xs py-1 px-3"
+                onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '' }])}
+              >
+                + Add Child
+              </Button>
+            </div>
+            <p className="text-xs text-gray-400 mb-3">
+              Add children under 18 who will attend classes. You'll be able to book classes for them and pay on their behalf.
+            </p>
+            
+            {familyMembers.map((fm, index) => {
+              const age = fm.dob ? calculateAge(fm.dob) : null;
+              
+              return (
+                <div key={index} className="bg-brand-dark p-3 rounded-lg mb-3 space-y-2">
+                  <div className="flex justify-between items-start">
+                    <h4 className="text-sm font-semibold text-white">Child {index + 1}</h4>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      className="text-xs py-1 px-2"
+                      onClick={() => setFamilyMembers(familyMembers.filter((_, i) => i !== index))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                  <Input
+                    label="Child's Name"
+                    id={`family-name-${index}`}
+                    type="text"
+                    value={fm.name}
+                    onChange={(e) => {
+                      const updated = [...familyMembers];
+                      updated[index].name = e.target.value;
+                      setFamilyMembers(updated);
+                    }}
+                    placeholder="Child's full name"
+                  />
+                  <Input
+                    label="Child's Date of Birth"
+                    id={`family-dob-${index}`}
+                    type="date"
+                    value={fm.dob}
+                    onChange={(e) => {
+                      const updated = [...familyMembers];
+                      updated[index].dob = e.target.value;
+                      setFamilyMembers(updated);
+                    }}
+                    placeholder="Date of birth"
+                  />
+                  {fm.dob && age !== null && (
+                    <div className="text-xs">
+                      {age >= 18 ? (
+                        <span className="text-red-400">⚠️ Must be under 18</span>
+                      ) : age < 0 ? (
+                        <span className="text-red-400">⚠️ Invalid date</span>
+                      ) : (
+                        <span className="text-green-400">✓ Age: {age} years old</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
           <Button 
             type="submit" 
             className="w-full" 
