@@ -20,7 +20,7 @@ const SignupPage: React.FC = () => {
     bio: '',
     coachId: null as string | null,
   });
-  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; dob: string }>>([]);
+  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; dob: string; ability?: string; isCarded?: boolean }>>([]);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -198,7 +198,7 @@ const SignupPage: React.FC = () => {
                 type="button"
                 variant="secondary"
                 className="text-xs py-1 px-3"
-                onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '' }])}
+                onClick={() => setFamilyMembers([...familyMembers, { name: '', dob: '', ability: 'Novice', isCarded: false }])}
               >
                 + Add Child
               </Button>
@@ -258,6 +258,37 @@ const SignupPage: React.FC = () => {
                       )}
                     </div>
                   )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-1">Ability Level (Optional)</label>
+                    <select 
+                      value={fm.ability || 'Novice'}
+                      onChange={(e) => {
+                        const updated = [...familyMembers];
+                        updated[index].ability = e.target.value;
+                        setFamilyMembers(updated);
+                      }}
+                      className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
+                    >
+                      <option value="Novice">Novice</option>
+                      <option value="Intermediate">Intermediate</option>
+                      <option value="Advanced">Advanced</option>
+                      <option value="Competitive">Competitive</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="checkbox" 
+                      id={`family-carded-${index}`}
+                      checked={fm.isCarded || false}
+                      onChange={(e) => {
+                        const updated = [...familyMembers];
+                        updated[index].isCarded = e.target.checked;
+                        setFamilyMembers(updated);
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
+                    />
+                    <label htmlFor={`family-carded-${index}`} className="text-sm text-gray-300">Mark as Carded Boxer (Optional)</label>
+                  </div>
                 </div>
               );
             })}

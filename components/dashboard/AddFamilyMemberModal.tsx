@@ -80,6 +80,30 @@ const AddFamilyMemberModal: React.FC<AddFamilyMemberModalProps> = ({ isOpen, onC
           onChange={(e) => setDob(e.target.value)} 
           required 
         />
+        <div>
+          <label htmlFor="child-ability" className="block text-sm font-medium text-gray-300 mb-1">Ability Level (Optional)</label>
+          <select 
+            id="child-ability" 
+            value={ability} 
+            onChange={(e) => setAbility(e.target.value as 'Novice' | 'Intermediate' | 'Advanced' | 'Competitive')} 
+            className="w-full bg-brand-dark border border-gray-600 rounded-md px-3 py-2 text-white"
+          >
+            <option value="Novice">Novice</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Competitive">Competitive</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <input 
+            type="checkbox" 
+            id="child-isCarded"
+            checked={isCarded}
+            onChange={(e) => setIsCarded(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-brand-red focus:ring-brand-red"
+          />
+          <label htmlFor="child-isCarded" className="text-sm text-gray-300">Mark as Carded Boxer (Optional)</label>
+        </div>
         <div className="flex justify-end gap-4 pt-4">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
             <Button type="submit">Add Member</Button>
