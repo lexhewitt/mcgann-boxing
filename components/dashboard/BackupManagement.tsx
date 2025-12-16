@@ -27,6 +27,7 @@ const BackupManagement: React.FC = () => {
   const [backupToRestore, setBackupToRestore] = useState<Backup | null>(null);
   const [backupName, setBackupName] = useState('');
   const [backupDescription, setBackupDescription] = useState('');
+  const [restoreConfirmation, setRestoreConfirmation] = useState('');
 
   useEffect(() => {
     loadBackups();
@@ -115,13 +116,15 @@ const BackupManagement: React.FC = () => {
   const handleRestore = async () => {
     if (!backupToRestore) return;
 
-    const confirmMessage = `WARNING: This will restore the system to the state from ${new Date(backupToRestore.created_at).toLocaleString()}.\n\nThis will REPLACE all current data. Are you absolutely sure?`;
-    if (!window.confirm(confirmMessage)) {
+    // Require exact match of "RESTORE" (case-sensitive)
+    if (restoreConfirmation !== 'RESTORE') {
+      alert('You must type "RESTORE" exactly (all caps) to confirm the restore operation.');
       return;
     }
 
-    const doubleConfirm = window.prompt('Type "RESTORE" to confirm:');
-    if (doubleConfirm !== 'RESTORE') {
+    // Final confirmation dialog
+    const confirmMessage = `FINAL WARNING: This will restore the system to the state from ${new Date(backupToRestore.created_at).toLocaleString()}.\n\nThis will PERMANENTLY REPLACE all current data. This action cannot be undone.\n\nAre you absolutely certain you want to proceed?`;
+    if (!window.confirm(confirmMessage)) {
       return;
     }
 
@@ -143,6 +146,7 @@ const BackupManagement: React.FC = () => {
         alert('Backup restored successfully! The page will refresh.');
         setIsRestoreModalOpen(false);
         setBackupToRestore(null);
+        setRestoreConfirmation('');
         // Refresh all data
         await refreshData();
         window.location.reload();
@@ -296,7 +300,8 @@ const BackupManagement: React.FC = () => {
                             variant="secondary"
                             className="text-xs py-1 px-2"
                             onClick={() => {
-                              setBackupToRestore(backup);
+                              setBackupToRestore(null);
+                              setRestoreConfirmation('');
                               setIsRestoreModalOpen(true);
                             }}
                           >
@@ -314,54 +319,146 @@ const BackupManagement: React.FC = () => {
       </div>
 
       {/* Restore Confirmation Modal */}
-      {backupToRestore && (
-        <Modal
-          isOpen={isRestoreModalOpen}
-          onClose={() => {
-            setIsRestoreModalOpen(false);
-            setBackupToRestore(null);
-          }}
-          title={`Restore Backup: ${backupToRestore.backup_name}`}
-        >
-          <div className="space-y-4">
-            <div className="bg-red-900/20 border border-red-500 p-4 rounded-lg">
-              <p className="text-red-300 font-semibold mb-2">⚠️ WARNING</p>
-              <p className="text-sm text-red-200">
-                Restoring this backup will <strong>REPLACE ALL CURRENT DATA</strong> with the data from{' '}
-                <strong>{new Date(backupToRestore.created_at).toLocaleString()}</strong>.
-              </p>
-              <p className="text-sm text-red-200 mt-2">
-                This action cannot be undone. Make sure you have a current backup before proceeding.
-              </p>
-            </div>
-            <div className="bg-brand-dark p-4 rounded-lg">
-              <p className="text-sm text-gray-300 mb-2">Backup Details:</p>
-              <ul className="text-xs text-gray-400 space-y-1">
-                <li>Name: {backupToRestore.backup_name}</li>
-                <li>Created: {new Date(backupToRestore.created_at).toLocaleString()}</li>
-                <li>Created By: {getCreatorName(backupToRestore.created_by)}</li>
-                {backupToRestore.backup_description && (
-                  <li>Description: {backupToRestore.backup_description}</li>
-                )}
-              </ul>
-            </div>
-            <div className="flex justify-end gap-4 pt-4">
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setIsRestoreModalOpen(false);
-                  setBackupToRestore(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={handleRestore}>
-                Restore Backup
-              </Button>
-            </div>
+      <Modal
+        isOpen={isRestoreModalOpen}
+        onClose={() => {
+          setIsRestoreModalOpen(false);
+          setBackupToRestore(null);
+          setRestoreConfirmation('');
+        }}
+        title="Restore System Backup"
+      >
+        <div className="space-y-4">
+          {/* Step 1: Select Backup */}
+          <div className="bg-brand-dark p-4 rounded-lg border border-gray-700">
+            <p className="text-sm text-gray-300 mb-3 font-semibold">Step 1: Select Backup to Restore</p>
+            {backups.length === 0 ? (
+              <p className="text-sm text-gray-400">No backups available.</p>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {backups.map(backup => (
+                  <div
+                    key={backup.id}
+                    onClick={() => {
+                      setBackupToRestore(backup);
+                      setRestoreConfirmation(''); // Reset confirmation when backup changes
+                    }}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      backupToRestore?.id === backup.id
+                        ? 'bg-blue-900/30 border-blue-500'
+                        : 'bg-gray-800 border-gray-600 hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            backupToRestore?.id === backup.id
+                              ? 'border-blue-400 bg-blue-500'
+                              : 'border-gray-500'
+                          }`}>
+                            {backupToRestore?.id === backup.id && (
+                              <div className="w-2 h-2 rounded-full bg-white"></div>
+                            )}
+                          </div>
+                          <div className="font-semibold text-white">{backup.backup_name}</div>
+                        </div>
+                        {backup.backup_description && (
+                          <div className="text-xs text-gray-400 mt-1 ml-6">{backup.backup_description}</div>
+                        )}
+                        <div className="text-xs text-gray-400 mt-1 ml-6">
+                          Created: {new Date(backup.created_at).toLocaleString()} by {getCreatorName(backup.created_by)}
+                          {backup.restored_at && (
+                            <span className="text-yellow-400 ml-2">(Previously restored)</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </Modal>
-      )}
+
+          {/* Step 2: Warning (only show if backup selected) */}
+          {backupToRestore && (
+            <>
+              <div className="bg-red-900/20 border-2 border-red-500 p-4 rounded-lg">
+                <p className="text-red-300 font-semibold mb-2 text-lg">⚠️ CRITICAL WARNING</p>
+                <p className="text-sm text-red-200 mb-2">
+                  Restoring this backup will <strong className="text-red-100">PERMANENTLY REPLACE ALL CURRENT DATA</strong> with the data from{' '}
+                  <strong>{new Date(backupToRestore.created_at).toLocaleString()}</strong>.
+                </p>
+                <p className="text-sm text-red-200">
+                  <strong>This action cannot be undone.</strong> Make sure you have a current backup before proceeding.
+                </p>
+              </div>
+              <div className="bg-brand-dark p-4 rounded-lg border border-gray-700">
+                <p className="text-sm text-gray-300 mb-2 font-semibold">Selected Backup Details:</p>
+                <ul className="text-xs text-gray-400 space-y-1">
+                  <li>Name: {backupToRestore.backup_name}</li>
+                  <li>Created: {new Date(backupToRestore.created_at).toLocaleString()}</li>
+                  <li>Created By: {getCreatorName(backupToRestore.created_by)}</li>
+                  <li>Size: {formatFileSize(backupToRestore.file_size_bytes)}</li>
+                  {backupToRestore.backup_description && (
+                    <li>Description: {backupToRestore.backup_description}</li>
+                  )}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {/* Step 3: Type RESTORE (only show if backup selected) */}
+          {backupToRestore && (
+            <div className="bg-yellow-900/20 border border-yellow-600 p-4 rounded-lg">
+              <p className="text-yellow-300 font-semibold mb-2">🔒 Step 2: Confirmation Required</p>
+              <p className="text-sm text-yellow-200 mb-3">
+                To proceed with the restore, you must type <strong className="text-yellow-100">RESTORE</strong> (all caps) in the field below:
+              </p>
+              <Input
+                label="Type 'RESTORE' to confirm"
+                id="restore-confirmation"
+                value={restoreConfirmation}
+                onChange={(e) => setRestoreConfirmation(e.target.value)}
+                placeholder="RESTORE"
+                className="font-mono text-lg tracking-wider"
+                autoFocus
+              />
+              {restoreConfirmation && restoreConfirmation !== 'RESTORE' && (
+                <p className="text-xs text-red-400 mt-2">
+                  ❌ The confirmation text does not match. You must type exactly "RESTORE" (all capital letters).
+                </p>
+              )}
+              {restoreConfirmation === 'RESTORE' && (
+                <p className="text-xs text-green-400 mt-2">
+                  ✓ Confirmation text matches. You can proceed with the restore.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-4 pt-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsRestoreModalOpen(false);
+                setBackupToRestore(null);
+                setRestoreConfirmation('');
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              variant="danger" 
+              onClick={handleRestore}
+              disabled={!backupToRestore || restoreConfirmation !== 'RESTORE'}
+              className={(!backupToRestore || restoreConfirmation !== 'RESTORE') ? 'opacity-50 cursor-not-allowed' : ''}
+            >
+              Restore Backup
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };
