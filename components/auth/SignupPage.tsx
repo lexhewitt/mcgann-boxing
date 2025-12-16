@@ -20,6 +20,7 @@ const SignupPage: React.FC = () => {
     bio: '',
     coachId: null as string | null,
   });
+  const [familyMembers, setFamilyMembers] = useState<Array<{ name: string; dob: string }>>([]);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -89,6 +90,7 @@ const SignupPage: React.FC = () => {
         bio: formData.bio,
         membershipStatus: 'PAYG',
         coachId: formData.coachId || null,
+        familyMembers: familyMembers.filter(fm => fm.name && fm.dob), // Only include valid family members
       });
       
       if (result.success) {

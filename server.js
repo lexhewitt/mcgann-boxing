@@ -611,7 +611,7 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
 // POST /server-api/auth/register - Register a new member with password
 apiRouter.post('/auth/register', express.json(), async (req, res) => {
   try {
-    const { name, email, password, dob, sex, ability, bio, coachId } = req.body;
+    const { name, email, password, dob, sex, ability, bio, coachId, familyMembers } = req.body;
     
     if (!name || !email || !password || !dob) {
       return res.status(400).json({ error: 'Name, email, password, and date of birth are required' });
@@ -669,6 +669,32 @@ apiRouter.post('/auth/register', express.json(), async (req, res) => {
     if (insertError) {
       console.error('Supabase: insert member failed', insertError);
       return res.status(500).json({ error: 'Failed to create account' });
+    }
+
+    // Add family members if provided
+    if (familyMembers && Array.isArray(familyMembers) && familyMembers.length > 0) {
+      const validFamilyMembers = familyMembers.filter(fm => fm.name && fm.dob);
+      
+      if (validFamilyMembers.length > 0) {
+        const familyInserts = validFamilyMembers.map((fm, index) => ({
+          id: `fm-${memberId}-${index}`,
+          parent_id: memberId,
+          name: fm.name,
+          dob: fm.dob,
+        }));
+
+        const { error: familyError } = await supabase
+          .from('family_members')
+          .insert(familyInserts);
+
+        if (familyError) {
+          console.error('Supabase: insert family members failed', familyError);
+          // Don't fail registration if family members fail - member is already created
+          // Just log the error
+        } else {
+          console.log(`[Auth] Registered member ${memberId} with ${validFamilyMembers.length} family member(s)`);
+        }
+      }
     }
 
     return res.json({ 

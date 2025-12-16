@@ -1017,9 +1017,26 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setBookings(prev => prev.filter(b => b.memberId !== memberId));
   };
 
-  const addFamilyMember = (newFamilyMemberData: Omit<FamilyMember, 'id'>) => {
+  const addFamilyMember = async (newFamilyMemberData: Omit<FamilyMember, 'id'>) => {
     const newFamilyMember: FamilyMember = { ...newFamilyMemberData, id: `fm${Date.now()}` };
     setFamilyMembers(prev => [...prev, newFamilyMember]);
+    
+    // Save to Supabase
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      const { error } = await supabaseClient.from('family_members').insert({
+        id: newFamilyMember.id,
+        parent_id: newFamilyMember.parentId,
+        name: newFamilyMember.name,
+        dob: newFamilyMember.dob,
+      });
+      
+      if (error) {
+        console.error('Supabase: insert family member failed', error.message);
+        // Remove from local state if insert failed
+        setFamilyMembers(prev => prev.filter(fm => fm.id !== newFamilyMember.id));
+      }
+    }
   };
 
   const deleteFamilyMember = (familyMemberId: string) => {

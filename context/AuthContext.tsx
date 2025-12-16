@@ -85,7 +85,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const registerMember = async (memberData: Omit<Member, 'id' | 'role'> & { password: string }): Promise<{ success: boolean; user?: AppUser; error?: string }> => {
+  const registerMember = async (memberData: Omit<Member, 'id' | 'role'> & { password: string; familyMembers?: Array<{ name: string; dob: string }> }): Promise<{ success: boolean; user?: AppUser; error?: string }> => {
     try {
       const response = await fetch('/server-api/auth/register', {
         method: 'POST',
@@ -99,6 +99,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           ability: memberData.ability,
           bio: memberData.bio || '',
           coachId: memberData.coachId || null,
+          familyMembers: memberData.familyMembers || [],
         }),
       });
 
