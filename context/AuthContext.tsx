@@ -4,53 +4,140 @@ import { useData } from './DataContext';
 
 interface AuthContextType {
   currentUser: AppUser | null;
-  login: (email: string) => boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  registerMember: (memberData: Omit<Member, 'id' | 'role'>) => AppUser | null;
+  registerMember: (memberData: Omit<Member, 'id' | 'role'> & { password: string }) => Promise<{ success: boolean; user?: AppUser; error?: string }>;
   addCoach: (coachData: Omit<Coach, 'id'>) => Coach | null;
   updateCurrentUser: (userData: Partial<AppUser>) => void;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const AUTH_EMAIL_KEY = 'fleetwood-auth-email';
+const AUTH_USER_KEY = 'fleetwood-auth-user';
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const { members, coaches, addMember: addMemberToData, updateMember, addCoach: addCoachToData } = useData();
 
-  const login = useCallback((email: string): boolean => {
-    const allUsers: AppUser[] = [...members, ...coaches];
-    const user = allUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (user) {
-      setCurrentUser(user);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(AUTH_EMAIL_KEY, user.email.toLowerCase());
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const response = await fetch('/server-api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        return { success: false, error: data.error || 'Login failed' };
       }
-      return true;
+
+      // Map the user data to match our AppUser type
+      const user = data.user;
+      const appUser: AppUser = user.role === 'MEMBER' 
+        ? {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: UserRole.MEMBER,
+            dob: user.dob,
+            sex: user.sex,
+            ability: user.ability,
+            bio: user.bio,
+            coachId: user.coach_id,
+            isCarded: user.is_carded,
+            membershipStatus: user.membership_status,
+            membershipStartDate: user.membership_start_date,
+            membershipExpiry: user.membership_expiry,
+            isRollingMonthly: user.is_rolling_monthly,
+          }
+        : {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role === 'ADMIN' ? UserRole.ADMIN : UserRole.COACH,
+            level: user.level,
+            bio: user.bio,
+            imageUrl: user.imageUrl || user.image_url,
+            mobileNumber: user.mobileNumber || user.mobile_number,
+            bankDetails: user.bankDetails || user.bank_details,
+            whatsappAutoReplyEnabled: user.whatsappAutoReplyEnabled ?? user.whatsapp_auto_reply_enabled,
+            whatsappAutoReplyMessage: user.whatsappAutoReplyMessage || user.whatsapp_auto_reply_message,
+          };
+
+      setCurrentUser(appUser);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ id: appUser.id, email: appUser.email }));
+      }
+      return { success: true };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
     }
-    return false;
-  }, [members, coaches]);
+  }, []);
 
   const logout = () => {
     setCurrentUser(null);
     if (typeof window !== 'undefined') {
-      localStorage.removeItem(AUTH_EMAIL_KEY);
+      localStorage.removeItem(AUTH_USER_KEY);
     }
   };
 
-  const registerMember = (memberData: Omit<Member, 'id' | 'role'>): AppUser | null => {
-    const existingUser = [...members, ...coaches].find(u => u.email.toLowerCase() === memberData.email.toLowerCase());
-    if (existingUser) {
-        alert("User with this email already exists.");
-        return null;
+  const registerMember = async (memberData: Omit<Member, 'id' | 'role'> & { password: string }): Promise<{ success: boolean; user?: AppUser; error?: string }> => {
+    try {
+      const response = await fetch('/server-api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: memberData.name,
+          email: memberData.email,
+          password: memberData.password,
+          dob: memberData.dob,
+          sex: memberData.sex,
+          ability: memberData.ability,
+          bio: memberData.bio || '',
+          coachId: memberData.coachId || null,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        return { success: false, error: data.error || 'Registration failed' };
+      }
+
+      // Map the user data to match our AppUser type
+      const user = data.user;
+      const newMember: Member = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: UserRole.MEMBER,
+        dob: user.dob,
+        sex: user.sex,
+        ability: user.ability,
+        bio: user.bio,
+        coachId: user.coach_id,
+        isCarded: user.is_carded,
+        membershipStatus: user.membership_status,
+        membershipStartDate: user.membership_start_date,
+        membershipExpiry: user.membership_expiry,
+        isRollingMonthly: user.is_rolling_monthly,
+      };
+
+      // Also add to local data context
+      addMemberToData(newMember);
+      setCurrentUser(newMember);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify({ id: newMember.id, email: newMember.email }));
+      }
+      return { success: true, user: newMember };
+    } catch (error) {
+      console.error('Registration error:', error);
+      return { success: false, error: 'Network error. Please try again.' };
     }
-    const newMember = addMemberToData({ ...memberData, role: UserRole.MEMBER });
-    setCurrentUser(newMember);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(AUTH_EMAIL_KEY, newMember.email.toLowerCase());
-    }
-    return newMember;
   };
   
   const addCoach = (coachData: Omit<Coach, 'id'>): Coach | null => {
@@ -84,18 +171,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (currentUser) return;
-    const savedEmail = localStorage.getItem(AUTH_EMAIL_KEY);
-    if (!savedEmail) return;
-    const allUsers: AppUser[] = [...members, ...coaches];
-    const matchedUser = allUsers.find(u => u.email.toLowerCase() === savedEmail.toLowerCase());
-    if (matchedUser) {
-      setCurrentUser(matchedUser);
+    const savedAuth = localStorage.getItem(AUTH_USER_KEY);
+    if (!savedAuth) return;
+    
+    try {
+      const { id, email } = JSON.parse(savedAuth);
+      const allUsers: AppUser[] = [...members, ...coaches];
+      const matchedUser = allUsers.find(u => u.id === id || u.email.toLowerCase() === email.toLowerCase());
+      if (matchedUser) {
+        setCurrentUser(matchedUser);
+      } else {
+        // If user not found in local data, clear saved auth
+        localStorage.removeItem(AUTH_USER_KEY);
+      }
+    } catch (error) {
+      console.error('Error parsing saved auth:', error);
+      localStorage.removeItem(AUTH_USER_KEY);
     }
   }, [members, coaches, currentUser]);
 
+  const isAuthenticated = currentUser !== null;
 
   return (
-    <AuthContext.Provider value={{ currentUser, login, logout, registerMember, addCoach, updateCurrentUser }}>
+    <AuthContext.Provider value={{ currentUser, login, logout, registerMember, addCoach, updateCurrentUser, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

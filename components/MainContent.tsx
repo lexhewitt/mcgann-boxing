@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import Dashboard from './dashboard/Dashboard';
 import LandingPage from './LandingPage';
+import ProtectedRoute from './auth/ProtectedRoute';
 import { finalizeStripeCheckoutSession } from '../services/stripeService';
 
 interface ConfirmationSummary {
@@ -211,7 +212,13 @@ const MainContent: React.FC<MainContentProps> = ({ onRegisterClick }) => {
 
   return (
     <>
-      {currentUser ? <Dashboard /> : <LandingPage onRegisterClick={onRegisterClick} />}
+      {currentUser ? (
+        <ProtectedRoute>
+          <Dashboard />
+        </ProtectedRoute>
+      ) : (
+        <LandingPage onRegisterClick={onRegisterClick} />
+      )}
       {confirmation && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4">
           <div className="bg-brand-gray max-w-lg w-full rounded-2xl p-8 shadow-xl text-white space-y-4">

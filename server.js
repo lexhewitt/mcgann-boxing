@@ -6,6 +6,7 @@
 const express = require('express');
 const Stripe = require('stripe');
 const path = require('path');
+const bcrypt = require('bcrypt');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
@@ -512,6 +513,237 @@ const handleCheckoutSessionCompleted = async (session) => {
 
 
 // --- API Route Definitions ---
+
+// POST /server-api/auth/login - Authenticate user with email and password
+apiRouter.post('/auth/login', express.json(), async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Check members table
+    const { data: member, error: memberError } = await supabase
+      .from('members')
+      .select('id, name, email, role, dob, sex, ability, bio, coach_id, is_carded, membership_status, membership_start_date, membership_expiry, is_rolling_monthly, password_hash')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (memberError && memberError.code !== 'PGRST116') {
+      console.error('Supabase: member lookup error', memberError);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (member) {
+      // Check if password is set
+      if (!member.password_hash) {
+        return res.status(401).json({ error: 'Password not set. Please contact admin to set your password.' });
+      }
+
+      // Verify password
+      const isValid = await bcrypt.compare(password, member.password_hash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Remove password_hash from response
+      const { password_hash, ...userData } = member;
+      return res.json({ 
+        success: true, 
+        user: {
+          ...userData,
+          role: 'MEMBER'
+        }
+      });
+    }
+
+    // Check coaches table
+    const { data: coach, error: coachError } = await supabase
+      .from('coaches')
+      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, password_hash')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (coachError && coachError.code !== 'PGRST116') {
+      console.error('Supabase: coach lookup error', coachError);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (coach) {
+      // Check if password is set
+      if (!coach.password_hash) {
+        return res.status(401).json({ error: 'Password not set. Please contact admin to set your password.' });
+      }
+
+      // Verify password
+      const isValid = await bcrypt.compare(password, coach.password_hash);
+      if (!isValid) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+      }
+
+      // Remove password_hash from response
+      const { password_hash, ...userData } = coach;
+      return res.json({ 
+        success: true, 
+        user: {
+          ...userData,
+          imageUrl: userData.image_url,
+          mobileNumber: userData.mobile_number,
+          bankDetails: userData.bank_details,
+          whatsappAutoReplyEnabled: userData.whatsapp_auto_reply_enabled,
+          whatsappAutoReplyMessage: userData.whatsapp_auto_reply_message
+        }
+      });
+    }
+
+    return res.status(401).json({ error: 'Invalid email or password' });
+  } catch (error) {
+    console.error('[Auth] Login error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /server-api/auth/register - Register a new member with password
+apiRouter.post('/auth/register', express.json(), async (req, res) => {
+  try {
+    const { name, email, password, dob, sex, ability, bio, coachId } = req.body;
+    
+    if (!name || !email || !password || !dob) {
+      return res.status(400).json({ error: 'Name, email, password, and date of birth are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Check if user already exists
+    const { data: existingMember } = await supabase
+      .from('members')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    const { data: existingCoach } = await supabase
+      .from('coaches')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (existingMember || existingCoach) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create member
+    const memberId = `m${Date.now()}`;
+    const { data: newMember, error: insertError } = await supabase
+      .from('members')
+      .insert({
+        id: memberId,
+        name,
+        email: email.toLowerCase(),
+        role: 'MEMBER',
+        dob,
+        sex: sex || 'M',
+        ability: ability || 'Beginner',
+        bio: bio || '',
+        coach_id: coachId || null,
+        membership_status: 'PAYG',
+        password_hash: passwordHash
+      })
+      .select('id, name, email, role, dob, sex, ability, bio, coach_id, is_carded, membership_status, membership_start_date, membership_expiry, is_rolling_monthly')
+      .single();
+
+    if (insertError) {
+      console.error('Supabase: insert member failed', insertError);
+      return res.status(500).json({ error: 'Failed to create account' });
+    }
+
+    return res.json({ 
+      success: true, 
+      user: {
+        ...newMember,
+        role: 'MEMBER'
+      }
+    });
+  } catch (error) {
+    console.error('[Auth] Register error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /server-api/auth/set-password - Set password for existing user (admin or user themselves)
+apiRouter.post('/auth/set-password', express.json(), async (req, res) => {
+  try {
+    const { email, password, userId } = req.body;
+    
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const targetEmail = email?.toLowerCase();
+
+    // Update member password
+    if (userId) {
+      const { error: memberError } = await supabase
+        .from('members')
+        .update({ password_hash: passwordHash })
+        .eq('id', userId);
+
+      if (memberError) {
+        const { error: coachError } = await supabase
+          .from('coaches')
+          .update({ password_hash: passwordHash })
+          .eq('id', userId);
+
+        if (coachError) {
+          return res.status(500).json({ error: 'Failed to update password' });
+        }
+      }
+    } else if (targetEmail) {
+      const { error: memberError } = await supabase
+        .from('members')
+        .update({ password_hash: passwordHash })
+        .eq('email', targetEmail);
+
+      if (memberError) {
+        const { error: coachError } = await supabase
+          .from('coaches')
+          .update({ password_hash: passwordHash })
+          .eq('email', targetEmail);
+
+        if (coachError) {
+          return res.status(500).json({ error: 'Failed to update password' });
+        }
+      }
+    } else {
+      return res.status(400).json({ error: 'Email or userId is required' });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('[Auth] Set password error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // GET /server-api/stripe-config
 apiRouter.post('/update-transaction', express.json(), async (req, res) => {

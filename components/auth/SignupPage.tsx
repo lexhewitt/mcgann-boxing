@@ -12,6 +12,8 @@ const SignupPage: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     dob: '',
     sex: 'M' as 'M' | 'F',
     ability: 'Beginner' as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
@@ -51,6 +53,24 @@ const SignupPage: React.FC = () => {
       return;
     }
 
+    if (!formData.password) {
+      setError('Password is required.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      setIsSubmitting(false);
+      return;
+    }
+
     const age = calculateAge(formData.dob);
     if (age < 18) {
       setError('You must be 18 or older to create an account.');
@@ -59,19 +79,23 @@ const SignupPage: React.FC = () => {
     }
 
     try {
-      const user = registerMember({
-        ...formData,
+      const result = await registerMember({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        dob: formData.dob,
         sex: formData.sex,
         ability: formData.ability,
+        bio: formData.bio,
         membershipStatus: 'PAYG',
         coachId: formData.coachId || null,
       });
       
-      if (user) {
+      if (result.success) {
         // Redirect to dashboard after successful registration
         window.location.href = '/';
       } else {
-        setError('Registration failed. Email might be taken.');
+        setError(result.error || 'Registration failed. Email might be taken.');
       }
     } catch (err) {
       setError('Registration failed. Please try again.');

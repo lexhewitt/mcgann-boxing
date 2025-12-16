@@ -19,6 +19,8 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
+    confirmPassword: '',
     dob: '',
     sex: 'M',
     ability: 'Beginner',
@@ -26,6 +28,7 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     coachId: null as string | null,
   });
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   // Set coachId from prop or URL parameter
   useEffect(() => {
@@ -45,34 +48,71 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (!formData.dob) {
       setError('Date of Birth is required.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!formData.password) {
+      setError('Password is required.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      setIsLoading(false);
       return;
     }
 
     const age = calculateAge(formData.dob);
     if (age < 18) {
       setError('You must be 18 or older to create an account.');
+      setIsLoading(false);
       return;
     }
 
-    // FIX: Added the required `membershipStatus` property with a default value of 'PAYG' for new registrations.
-    const user = registerMember({
-        ...formData,
+    const result = await registerMember({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+        dob: formData.dob,
         sex: formData.sex as 'M' | 'F',
         ability: formData.ability as 'Beginner' | 'Intermediate' | 'Advanced' | 'Competitive',
+        bio: formData.bio,
         membershipStatus: 'PAYG',
         coachId: formData.coachId,
     });
-    if (user) {
+
+    if (result.success) {
       onClose();
+      setFormData({
+        name: '',
+        email: '',
+        password: '',
+        confirmPassword: '',
+        dob: '',
+        sex: 'M',
+        ability: 'Beginner',
+        bio: '',
+        coachId: null,
+      });
     } else {
-      setError('Registration failed. Email might be taken.');
+      setError(result.error || 'Registration failed. Email might be taken.');
     }
+    setIsLoading(false);
   };
 
   const selectedCoach = coaches.find(c => c.id === formData.coachId);
@@ -93,7 +133,9 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
         )}
 
         <Input label="Full Name" id="name" name="name" type="text" value={formData.name} onChange={handleChange} required />
-        <Input label="Email" id="email" name="email" type="email" value={formData.email} onChange={handleChange} required />
+        <Input label="Email" id="email" name="email" type="email" value={formData.email} onChange={handleChange} required autoComplete="email" />
+        <Input label="Password" id="password" name="password" type="password" value={formData.password} onChange={handleChange} required autoComplete="new-password" placeholder="At least 6 characters" />
+        <Input label="Confirm Password" id="confirmPassword" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} required autoComplete="new-password" />
         <Input label="Date of Birth" id="dob" name="dob" type="date" value={formData.dob} onChange={handleChange} required />
         <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Sex</label>
@@ -111,8 +153,8 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
                 <option value="Competitive">Competitive</option>
             </select>
         </div>
-        <Button type="submit" className="w-full">
-          Register
+        <Button type="submit" className="w-full" disabled={isLoading}>
+          {isLoading ? 'Registering...' : 'Register'}
         </Button>
         <p className="text-center text-sm text-gray-400">
           Already a member?{' '}
