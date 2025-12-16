@@ -133,7 +133,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCoaches(mapped);
       }
       if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
-      if (!familyRes.error && familyRes.data) setFamilyMembers(familyRes.data as FamilyMember[]);
+      if (!familyRes.error && familyRes.data) {
+        const mappedFamily = (familyRes.data as any[]).map(row => ({
+          id: row.id,
+          parentId: row.parent_id,
+          name: row.name,
+          dob: row.dob,
+          ability: row.ability || undefined,
+          isCarded: row.is_carded || false,
+        })) as FamilyMember[];
+        setFamilyMembers(mappedFamily);
+      }
       
       // Map classes with multiple coaches from junction table
       if (!classesRes.error && classesRes.data) {
