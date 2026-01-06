@@ -3,6 +3,17 @@
 // The typical command would be `npm install && npm start`.
 // This requires setting the "Container command" or "Entrypoint" in your Cloud Run revision configuration.
 
+// Load environment variables from .env.local or .env
+try {
+  require('dotenv').config({ path: '.env.local' });
+} catch (e) {
+  try {
+    require('dotenv').config();
+  } catch (e2) {
+    // dotenv not installed, environment variables must be set manually
+  }
+}
+
 const express = require('express');
 const Stripe = require('stripe');
 const path = require('path');
