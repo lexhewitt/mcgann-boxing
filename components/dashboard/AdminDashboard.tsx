@@ -13,13 +13,13 @@ import FinancialsDashboard from './FinancialsDashboard';
 import CoachFinancialSummary from './CoachFinancialSummary';
 import AdminWhatsAppPanel from './AdminWhatsAppPanel';
 import BackupManagement from './BackupManagement';
-import AdminManagement from './AdminManagement';
+import Settings from './Settings';
 import { Coach, NotificationStatus } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { canManageAdmins } from '../../utils/permissions';
 
-type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp' | 'backups' | 'admin-management';
+type AdminTab = 'overview' | 'members' | 'coaches' | 'classes' | 'calendar' | 'activity' | 'notifications' | 'financials' | 'reports' | 'system' | 'whatsapp' | 'backups' | 'settings';
 
 interface AdminDashboardProps {
   setViewAsCoach: (coach: Coach | null) => void;
@@ -29,7 +29,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [financialCoach, setFinancialCoach] = useState<Coach | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { currentUser } = useAuth();
+  const { currentUser, refreshCurrentUser } = useAuth();
   const { bookings, classes, members, notifications, bookingAlerts, refreshData } = useData();
   const pendingClassTransfers = notifications.filter(n => n.status === NotificationStatus.PENDING).length;
   const pendingBookingAlerts = (() => {
@@ -87,8 +87,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
         return <NotificationsPanel user={currentUser} />;
       case 'backups':
         return <BackupManagement />;
-      case 'admin-management':
-        return <AdminManagement />;
+      case 'settings':
+        return <Settings />;
       default:
         return null;
     }
@@ -111,6 +111,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshData();
+    // Also refresh user data to get updated admin level
+    if (refreshCurrentUser) {
+      await refreshCurrentUser();
+    }
     setIsRefreshing(false);
   };
 
@@ -141,7 +145,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ setViewAsCoach }) => {
             <TabButton tabName='whatsapp' label="WhatsApp" />
             <TabButton tabName='system' label="System Status" />
             <TabButton tabName='backups' label="Backups" />
-            {canManageAdmins(currentUser) && <TabButton tabName='admin-management' label="Admin Management" />}
+            <TabButton tabName='settings' label="Settings" />
             <TabButton tabName='notifications' label="Notifications" count={totalPendingNotifications} />
             <TabButton tabName='activity' label="Activity Log" />
         </div>

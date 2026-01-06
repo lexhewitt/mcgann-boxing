@@ -341,8 +341,24 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ isMemberMode = false }) =
     const params = new URLSearchParams(window.location.search);
     const coachParam = params.get('coach');
     const classParam = params.get('class');
+    const typeParam = params.get('type') as ServiceType | null;
     
-    if (coachParam) {
+    // If type parameter is provided, pre-select service type
+    if (typeParam && (typeParam === 'CLASS' || typeParam === 'PRIVATE' || typeParam === 'GROUP')) {
+      setSelectedServiceType(typeParam);
+      // If a coach is also specified, select them and move to step 3
+      if (coachParam) {
+        const coach = coaches.find(c => c.id === coachParam);
+        if (coach) {
+          setSelectedCoach(coach);
+          setStep(3); // Skip to date/time selection
+        } else {
+          setStep(2); // Just show service type selection with coach selection
+        }
+      } else {
+        setStep(1); // Show coach selection first
+      }
+    } else if (coachParam) {
       const coach = coaches.find(c => c.id === coachParam);
       if (coach) {
         setSelectedCoach(coach);
@@ -662,12 +678,24 @@ const BookingWizard: React.FC<BookingWizardProps> = ({ isMemberMode = false }) =
           <h2 className="text-2xl font-semibold text-white">Choose Your Coach</h2>
           <p className="text-sm text-gray-400">Select a coach to view their availability</p>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {coaches.map(coach => (
+            {coaches
+              .filter(coach => coach.email !== 'lexhewitt@gmail.com') // Hide Lex from booking
+              .map(coach => (
               <button
                 key={coach.id}
                 onClick={() => {
                   setSelectedCoach(coach);
-                  setStep(2);
+                  // If service type is already selected (from URL param), skip to step 3
+                  const params = new URLSearchParams(window.location.search);
+                  const typeParam = params.get('type') as ServiceType | null;
+                  if (selectedServiceType || (typeParam && (typeParam === 'CLASS' || typeParam === 'PRIVATE' || typeParam === 'GROUP'))) {
+                    if (!selectedServiceType && typeParam) {
+                      setSelectedServiceType(typeParam);
+                    }
+                    setStep(3);
+                  } else {
+                    setStep(2);
+                  }
                 }}
                 className={`p-4 rounded-2xl border-2 transition ${
                   selectedCoach?.id === coach.id

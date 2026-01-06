@@ -1,5 +1,5 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole, ConfirmationStatus } from '../types';
+import { Coach, GymClass, Member, Booking, AuditLog, AppUser, FamilyMember, AvailabilitySlot, GymAccessLog, UnavailableSlot, ClassTransferNotification, NotificationStatus, Transaction, TransactionSource, TransactionStatus, CoachSlot, CoachAppointment, SlotType, GuestBooking, BookingAlert, UserRole, AdminLevel, ConfirmationStatus } from '../types';
 import { COACHES, CLASSES, MEMBERS, INITIAL_BOOKINGS, FAMILY_MEMBERS, COACH_AVAILABILITY, GYM_ACCESS_LOGS, UNAVAILABLE_SLOTS, INITIAL_NOTIFICATIONS, INITIAL_TRANSACTIONS, COACH_SLOTS, INITIAL_COACH_APPOINTMENTS } from '../constants';
 import { supabase, getSupabase } from '../services/supabaseClient';
 import { sendWhatsAppNotification } from '../services/notificationService';
@@ -26,7 +26,7 @@ interface DataContextType {
   undoClassTransfer: (classId: string, actor: AppUser) => void;
   cancelClassTransferRequest: (notificationId: string, actor: AppUser) => void;
   logGymAccess: (memberId: string, amount: number, paid?: boolean) => void;
-  addAvailabilitySlot: (slot: Omit<AvailabilitySlot, 'id'>) => void;
+  addAvailabilitySlot: (slot: Omit<AvailabilitySlot, 'id'>) => Promise<void>;
   deleteAvailabilitySlot: (slotId: string) => void;
   addUnavailableSlot: (slot: Omit<UnavailableSlot, 'id'>) => void;
   deleteUnavailableSlot: (slotId: string) => void;
@@ -89,6 +89,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setCoachAppointments(data.coachAppointments);
         setTransactions(data.transactions);
         setGuestBookings(data.guestBookings);
+        if (data.coachAvailability) setCoachAvailability(data.coachAvailability);
+        if (data.unavailableSlots) setUnavailableSlots(data.unavailableSlots);
         return;
       }
     } catch (error) {
@@ -101,7 +103,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return;
     }
     try {
-      const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes, classCoachesRes, slotCoachesRes] =
+      const [coachesRes, membersRes, familyRes, classesRes, bookingsRes, slotsRes, apptsRes, txRes, guestRes, classCoachesRes, slotCoachesRes, availRes, unavailRes] =
         await Promise.all([
           supabaseClient.from('coaches').select('*'),
           supabaseClient.from('members').select('*'),
@@ -114,6 +116,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           supabaseClient.from('guest_bookings').select('*'),
           supabaseClient.from('class_coaches').select('*'),
           supabaseClient.from('slot_coaches').select('*'),
+          supabaseClient.from('coach_availability').select('*'),
+          supabaseClient.from('unavailable_slots').select('*'),
         ]);
 
       if (!coachesRes.error && coachesRes.data) {
@@ -130,7 +134,9 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           whatsappAutoReplyEnabled: row.whatsapp_auto_reply_enabled ?? true,
           whatsappAutoReplyMessage: row.whatsapp_auto_reply_message || undefined,
           adminLevel: row.admin_level || undefined,
-        })) as Coach[];
+          isSuspended: row.is_suspended || false,
+          createdAt: row.created_at,
+        })) as (Coach & { isSuspended?: boolean; createdAt?: string })[];
         setCoaches(mapped);
       }
       if (!membersRes.error && membersRes.data) setMembers(membersRes.data as Member[]);
@@ -264,6 +270,27 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           createdAt: row.created_at,
         })) as GuestBooking[];
         setGuestBookings(mapped);
+      }
+      if (!availRes.error && availRes.data) {
+        const mapped = (availRes.data as any[]).map(row => ({
+          id: row.id,
+          coachId: row.coach_id,
+          day: row.day,
+          startTime: row.start_time,
+          endTime: row.end_time,
+          availabilityType: row.availability_type || 'GENERAL',
+        })) as AvailabilitySlot[];
+        setCoachAvailability(mapped);
+      }
+      if (!unavailRes.error && unavailRes.data) {
+        const mapped = (unavailRes.data as any[]).map(row => ({
+          id: row.id,
+          coachId: row.coach_id,
+          date: row.date,
+          startTime: row.start_time || undefined,
+          endTime: row.end_time || undefined,
+        })) as UnavailableSlot[];
+        setUnavailableSlots(mapped);
       }
     } catch (error) {
       console.error('Failed to load data from Supabase', error);
@@ -1090,6 +1117,20 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 
   const updateCoach = async (updatedCoach: Coach) => {
+    // Protect Lex from having admin status removed or changed
+    if (updatedCoach.email === 'lexhewitt@gmail.com') {
+      const originalCoach = coaches.find(c => c.id === updatedCoach.id);
+      if (originalCoach) {
+        // Ensure Lex remains a Super Admin
+        if (updatedCoach.role !== UserRole.ADMIN || updatedCoach.adminLevel !== AdminLevel.SUPERADMIN) {
+          alert('Lex Hewitt is a protected superadmin and must remain a Super Admin.');
+          // Restore original values
+          updatedCoach.role = originalCoach.role;
+          updatedCoach.adminLevel = originalCoach.adminLevel;
+        }
+      }
+    }
+
     setCoaches(prev => prev.map(c => c.id === updatedCoach.id ? updatedCoach : c));
     if (supabase) {
       const { error } = await supabase
@@ -1106,6 +1147,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           admin_level: updatedCoach.adminLevel || null,
           whatsapp_auto_reply_enabled: updatedCoach.whatsappAutoReplyEnabled ?? true,
           whatsapp_auto_reply_message: updatedCoach.whatsappAutoReplyMessage || null,
+          is_suspended: (updatedCoach as any).isSuspended || false,
         })
         .eq('id', updatedCoach.id);
       if (error) {
@@ -1138,6 +1180,13 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const deleteCoach = (coachId: string) => {
+    // Protect Lex Hewitt from deletion
+    const coachToDelete = coaches.find(c => c.id === coachId);
+    if (coachToDelete && coachToDelete.email === 'lexhewitt@gmail.com') {
+      alert("Lex Hewitt is a protected superadmin and cannot be deleted.");
+      return;
+    }
+
     const isAssignedToClass = classes.some(c => c.coachId === coachId);
     if (isAssignedToClass) {
       alert("Cannot delete coach. They are currently assigned to one or more classes. Please reassign the classes first.");
@@ -1152,6 +1201,14 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     );
 
     setCoaches(prev => prev.filter(c => c.id !== coachId));
+    
+    // Also delete from Supabase
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      supabaseClient.from('coaches').delete().eq('id', coachId).then(({ error }) => {
+        if (error) console.error('Supabase: delete coach failed', error.message);
+      });
+    }
   };
   
   const updateClass = (updatedClass: GymClass) => {
@@ -1210,8 +1267,12 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setBookings(prev => prev.filter(b => b.classId !== classId));
   };
   
-  const addAvailabilitySlot = (newSlotData: Omit<AvailabilitySlot, 'id'>) => {
-    const newSlot: AvailabilitySlot = { ...newSlotData, id: `av${Date.now()}` };
+  const addAvailabilitySlot = async (newSlotData: Omit<AvailabilitySlot, 'id'>) => {
+    const newSlot: AvailabilitySlot = { 
+      ...newSlotData, 
+      id: `av${Date.now()}`,
+      availabilityType: newSlotData.availabilityType || 'GENERAL',
+    };
     setCoachAvailability(prev => [...prev, newSlot].sort((a, b) => {
         const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         if (dayOrder.indexOf(a.day) !== dayOrder.indexOf(b.day)) {
@@ -1219,10 +1280,50 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         }
         return a.startTime.localeCompare(b.startTime);
     }));
+
+    // Save to Supabase
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      const { error } = await supabaseClient.from('coach_availability').insert({
+        id: newSlot.id,
+        coach_id: newSlot.coachId,
+        day: newSlot.day,
+        start_time: newSlot.startTime,
+        end_time: newSlot.endTime,
+        availability_type: newSlot.availabilityType || 'GENERAL',
+      });
+      if (error) {
+        console.error('Supabase: insert availability slot failed', error.message);
+        // Revert local state if insert failed
+        setCoachAvailability(prev => prev.filter(s => s.id !== newSlot.id));
+      }
+    }
   };
 
-  const deleteAvailabilitySlot = (slotId: string) => {
+  const deleteAvailabilitySlot = async (slotId: string) => {
     setCoachAvailability(prev => prev.filter(s => s.id !== slotId));
+    
+    // Delete from Supabase
+    const supabaseClient = getSupabase();
+    if (supabaseClient) {
+      const { error } = await supabaseClient.from('coach_availability').delete().eq('id', slotId);
+      if (error) {
+        console.error('Supabase: delete availability slot failed', error.message);
+        // Reload from Supabase to revert
+        const { data } = await supabaseClient.from('coach_availability').select('*');
+        if (data) {
+          const mapped = data.map((row: any) => ({
+            id: row.id,
+            coachId: row.coach_id,
+            day: row.day,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            availabilityType: row.availability_type || 'GENERAL',
+          })) as AvailabilitySlot[];
+          setCoachAvailability(mapped);
+        }
+      }
+    }
   };
   
   const addUnavailableSlot = (newSlotData: Omit<UnavailableSlot, 'id'>) => {

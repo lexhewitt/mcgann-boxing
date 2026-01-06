@@ -46,25 +46,29 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({ setActiveTab }) => {
     .filter(c => c.day === today)
     .sort((a,b) => a.time.localeCompare(b.time));
 
+  // Filter out Lex from members and coaches
+  const filteredMembers = members.filter(m => m.email !== 'lexhewitt@gmail.com');
+  const filteredCoaches = coaches.filter(c => c.email !== 'lexhewitt@gmail.com');
+  
   // Simulating recent members by taking the last 5
-  const recentMembers = [...members].reverse().slice(0, 5);
+  const recentMembers = [...filteredMembers].reverse().slice(0, 5);
   
   const activeMonthlyMembers = useMemo(() => {
-    return members.filter(m => 
+    return filteredMembers.filter(m => 
       m.membershipStatus === 'Monthly' && 
       m.membershipExpiry && 
       new Date(m.membershipExpiry) >= new Date()
     ).length;
-  }, [members]);
+  }, [filteredMembers]);
 
   return (
     <>
     <div className="space-y-8">
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Total Members" value={members.length} icon={<UsersIcon />} />
+        <StatCard title="Total Members" value={filteredMembers.length} icon={<UsersIcon />} />
         <StatCard title="Active Monthly" value={activeMonthlyMembers} icon={<CheckCircleIcon />} />
-        <StatCard title="Active Coaches" value={coaches.length} icon={<UserGroupIcon />} />
+        <StatCard title="Active Coaches" value={filteredCoaches.length} icon={<UserGroupIcon />} />
         <StatCard title="Total Classes" value={classes.length} icon={<ClipboardListIcon />} />
       </div>
 

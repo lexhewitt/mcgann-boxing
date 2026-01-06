@@ -84,6 +84,19 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
                                         <div className="flex-1">
                                             <div className="flex items-center gap-3 mb-2">
                                                 <p className="font-semibold text-white">{slot.day}: {slot.startTime} – {slot.endTime}</p>
+                                                {slot.availabilityType && (
+                                                  <span className={`text-xs px-2 py-1 rounded ${
+                                                    slot.availabilityType === 'CLASS' ? 'bg-blue-600/30 text-blue-300' :
+                                                    slot.availabilityType === 'PRIVATE' ? 'bg-purple-600/30 text-purple-300' :
+                                                    slot.availabilityType === 'GROUP' ? 'bg-green-600/30 text-green-300' :
+                                                    'bg-gray-600/30 text-gray-300'
+                                                  }`}>
+                                                    {slot.availabilityType === 'CLASS' ? 'Class' :
+                                                     slot.availabilityType === 'PRIVATE' ? '1-on-1' :
+                                                     slot.availabilityType === 'GROUP' ? 'Group' :
+                                                     'General'}
+                                                  </span>
+                                                )}
                                                 <button
                                                     onClick={() => {
                                                         const newStart = prompt('Enter new start time (HH:MM):', slot.startTime);
@@ -97,6 +110,7 @@ const CoachAvailabilityManager: React.FC<CoachAvailabilityManagerProps> = ({ coa
                                                                     day: slot.day,
                                                                     startTime: newStart,
                                                                     endTime: newEnd,
+                                                                    availabilityType: slot.availabilityType || 'GENERAL',
                                                                 });
                                                             }, 100);
                                                         } else if (newStart && newEnd) {

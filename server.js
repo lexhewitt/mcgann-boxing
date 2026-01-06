@@ -65,6 +65,8 @@ const bootstrapTables = async () => {
     guestRes,
     classCoachesRes,
     slotCoachesRes,
+    coachAvailabilityRes,
+    unavailableSlotsRes,
   ] = await Promise.all([
     supabase.from('coaches').select('*'),
     supabase.from('members').select('*'),
@@ -77,6 +79,8 @@ const bootstrapTables = async () => {
     supabase.from('guest_bookings').select('*'),
     supabase.from('class_coaches').select('*'),
     supabase.from('slot_coaches').select('*'),
+    supabase.from('coach_availability').select('*'),
+    supabase.from('unavailable_slots').select('*'),
   ]);
 
   const ensureOk = (res, name) => {
@@ -215,6 +219,25 @@ const bootstrapTables = async () => {
       adminLevel: row.admin_level || undefined,
     }));
 
+  const mapAvailabilitySlots = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      coachId: row.coach_id,
+      day: row.day,
+      startTime: row.start_time,
+      endTime: row.end_time,
+      availabilityType: row.availability_type || 'GENERAL',
+    }));
+
+  const mapUnavailableSlots = (rows) =>
+    rows.map((row) => ({
+      id: row.id,
+      coachId: row.coach_id,
+      date: row.date,
+      startTime: row.start_time || undefined,
+      endTime: row.end_time || undefined,
+    }));
+
   return {
     coaches: mapCoaches(ensureOk(coachesRes, 'coaches')),
     members: ensureOk(membersRes, 'members'),
@@ -225,6 +248,8 @@ const bootstrapTables = async () => {
     coachAppointments: mapAppointments(ensureOk(apptsRes, 'coach appointments')),
     transactions: mapTransactions(ensureOk(txRes, 'transactions')),
     guestBookings: mapGuestBookings(ensureOk(guestRes, 'guest bookings')),
+    coachAvailability: mapAvailabilitySlots(ensureOk(coachAvailabilityRes, 'coach availability')),
+    unavailableSlots: mapUnavailableSlots(ensureOk(unavailableSlotsRes, 'unavailable slots')),
   };
 };
 
@@ -577,7 +602,7 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
     // Check coaches table
     const { data: coach, error: coachError } = await supabase
       .from('coaches')
-      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, admin_level, password_hash')
+      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, admin_level, password_hash, is_suspended, created_at')
       .eq('email', email.toLowerCase())
       .maybeSingle();
 
@@ -587,6 +612,11 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
     }
 
     if (coach) {
+      // Check if admin is suspended
+      if (coach.is_suspended) {
+        return res.status(403).json({ error: 'Your account has been suspended. Please contact an administrator.' });
+      }
+
       // Check if password is set
       if (!coach.password_hash) {
         return res.status(401).json({ error: 'Password not set. Please contact admin to set your password.' });
@@ -609,7 +639,9 @@ apiRouter.post('/auth/login', express.json(), async (req, res) => {
           bankDetails: userData.bank_details,
           whatsappAutoReplyEnabled: userData.whatsapp_auto_reply_enabled,
           whatsappAutoReplyMessage: userData.whatsapp_auto_reply_message,
-          adminLevel: userData.admin_level || undefined
+          adminLevel: userData.admin_level || undefined,
+          isSuspended: userData.is_suspended || false,
+          createdAt: userData.created_at
         }
       });
     }
@@ -795,6 +827,232 @@ apiRouter.post('/auth/set-password', express.json(), async (req, res) => {
     return res.json({ success: true });
   } catch (error) {
     console.error('[Auth] Set password error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /server-api/admin/create - Create a new admin (Super Admins only)
+apiRouter.post('/admin/create', express.json(), async (req, res) => {
+  try {
+    const { name, email, password, adminLevel } = req.body;
+
+    if (!name || !email || !password || !adminLevel) {
+      return res.status(400).json({ error: 'Name, email, password, and admin level are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Check if user already exists
+    const { data: existingMember } = await supabase
+      .from('members')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    const { data: existingCoach } = await supabase
+      .from('coaches')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (existingMember || existingCoach) {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create admin in coaches table
+    const adminId = `c${Date.now()}`;
+    const { data: newAdmin, error: insertError } = await supabase
+      .from('coaches')
+      .insert({
+        id: adminId,
+        name,
+        email: email.toLowerCase(),
+        role: 'ADMIN',
+        admin_level: adminLevel,
+        password_hash: passwordHash,
+        level: 'Admin',
+        bio: '',
+        image_url: `https://picsum.photos/seed/${Date.now()}/400/400`,
+        created_at: new Date().toISOString(),
+      })
+      .select('id, name, email, role, admin_level, created_at')
+      .single();
+
+    if (insertError) {
+      console.error('[Admin] Create error:', insertError);
+      return res.status(500).json({ error: 'Failed to create admin' });
+    }
+
+    return res.json({
+      success: true,
+      admin: {
+        ...newAdmin,
+        adminLevel: newAdmin.admin_level,
+      },
+    });
+  } catch (error) {
+    console.error('[Admin] Create error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /server-api/auth/me - Get current user from session (requires userId and email)
+// This is the primary endpoint for session validation and user data retrieval
+apiRouter.get('/auth/me', express.json(), async (req, res) => {
+  try {
+    const { userId, email } = req.query;
+    if (!userId || !email) {
+      return res.status(400).json({ success: false, error: 'User ID and email are required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ success: false, error: 'Database not configured' });
+    }
+
+    // Check coaches table first (for admins/coaches)
+    const { data: coach, error: coachError } = await supabase
+      .from('coaches')
+      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, admin_level, is_suspended, created_at')
+      .eq('id', userId)
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (coachError && coachError.code !== 'PGRST116') {
+      console.error('Supabase: coach lookup error', coachError);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+
+    if (coach) {
+      // Check if admin is suspended
+      if (coach.is_suspended) {
+        return res.status(403).json({ success: false, error: 'Your account has been suspended. Please contact an administrator.' });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          ...coach,
+          imageUrl: coach.image_url,
+          mobileNumber: coach.mobile_number,
+          bankDetails: coach.bank_details,
+          whatsappAutoReplyEnabled: coach.whatsapp_auto_reply_enabled,
+          whatsappAutoReplyMessage: coach.whatsapp_auto_reply_message,
+          adminLevel: coach.admin_level || undefined,
+          isSuspended: coach.is_suspended || false,
+          createdAt: coach.created_at
+        }
+      });
+    }
+
+    // Check members table
+    const { data: member, error: memberError } = await supabase
+      .from('members')
+      .select('id, name, email, role, dob, sex, ability, bio, coach_id, is_carded, membership_status, membership_start_date, membership_expiry, is_rolling_monthly')
+      .eq('id', userId)
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (memberError && memberError.code !== 'PGRST116') {
+      console.error('Supabase: member lookup error', memberError);
+      return res.status(500).json({ success: false, error: 'Database error' });
+    }
+
+    if (member) {
+      return res.json({
+        success: true,
+        user: {
+          ...member,
+          role: 'MEMBER'
+        }
+      });
+    }
+
+    return res.status(404).json({ success: false, error: 'User not found' });
+  } catch (error) {
+    console.error('[Auth] Get current user error:', error);
+    return res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+});
+
+// GET /server-api/auth/refresh-user - Refresh current user data (requires email in query or body)
+// DEPRECATED: Use /auth/me instead for better security
+apiRouter.get('/auth/refresh-user', express.json(), async (req, res) => {
+  try {
+    const email = req.query.email || req.body.email;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return res.status(500).json({ error: 'Database not configured' });
+    }
+
+    // Check coaches table
+    const { data: coach, error: coachError } = await supabase
+      .from('coaches')
+      .select('id, name, email, role, level, bio, image_url, mobile_number, bank_details, whatsapp_auto_reply_enabled, whatsapp_auto_reply_message, admin_level, is_suspended, created_at')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (coachError && coachError.code !== 'PGRST116') {
+      console.error('Supabase: coach lookup error', coachError);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (coach) {
+      return res.json({
+        success: true,
+        user: {
+          ...coach,
+          imageUrl: coach.image_url,
+          mobileNumber: coach.mobile_number,
+          bankDetails: coach.bank_details,
+          whatsappAutoReplyEnabled: coach.whatsapp_auto_reply_enabled,
+          whatsappAutoReplyMessage: coach.whatsapp_auto_reply_message,
+          adminLevel: coach.admin_level || undefined,
+          isSuspended: coach.is_suspended || false,
+          createdAt: coach.created_at
+        }
+      });
+    }
+
+    // Check members table
+    const { data: member, error: memberError } = await supabase
+      .from('members')
+      .select('id, name, email, role, dob, sex, ability, bio, coach_id, is_carded, membership_status, membership_start_date, membership_expiry, is_rolling_monthly')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (memberError && memberError.code !== 'PGRST116') {
+      console.error('Supabase: member lookup error', memberError);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    if (member) {
+      return res.json({
+        success: true,
+        user: {
+          ...member,
+          role: 'MEMBER'
+        }
+      });
+    }
+
+    return res.status(404).json({ error: 'User not found' });
+  } catch (error) {
+    console.error('[Auth] Refresh user error:', error);
     return res.status(500).json({ error: 'Internal server error' });
   }
 });

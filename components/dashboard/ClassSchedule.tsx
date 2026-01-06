@@ -202,6 +202,30 @@ const ClassSchedule: React.FC<ClassScheduleProps> = ({ viewMode = 'weekly' }) =>
             <div key={day} className="bg-black/30 rounded-2xl p-3 border border-gray-700 shadow-lg">
               <h3 className="font-semibold text-center text-white mb-3 uppercase tracking-wide">{day}</h3>
               <div className="space-y-3">
+                {/* Show coach availability for this day */}
+                {coachAvailability
+                  .filter(av => {
+                    // Hide Lex's availability from public view
+                    const coach = coaches.find(c => c.id === av.coachId);
+                    if (coach && coach.email === 'lexhewitt@gmail.com') return false;
+                    return av.day === day;
+                  })
+                  .sort((a, b) => a.startTime.localeCompare(b.startTime))
+                  .map(av => {
+                    const coach = coaches.find(c => c.id === av.coachId);
+                    return (
+                      <div
+                        key={`avail-${av.id}-${day}`}
+                        className="bg-purple-400/20 border border-purple-400/40 p-3 rounded-xl"
+                        title={`${coach?.name || 'Coach'} available: ${av.startTime} - ${av.endTime}`}
+                      >
+                        <p className="font-semibold text-purple-200 text-xs">Available</p>
+                        <p className="text-purple-300/80 text-xs mt-1">{av.startTime} - {av.endTime}</p>
+                        {coach && <p className="text-purple-300/70 text-[10px] mt-1">{coach.name}</p>}
+                      </div>
+                    );
+                  })}
+                {/* Show classes */}
                 {filteredClasses
                   .filter(c => c.day === day)
                 .sort((a,b) => a.time.localeCompare(b.time))

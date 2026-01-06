@@ -123,6 +123,7 @@ export interface AvailabilitySlot {
   day: 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
   startTime: string; // "HH:mm"
   endTime: string; // "HH:mm"
+  availabilityType?: 'GENERAL' | 'CLASS' | 'PRIVATE' | 'GROUP'; // Optional for backward compatibility
 }
 
 export interface UnavailableSlot {

@@ -124,7 +124,7 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
     <>
       <div className="overflow-x-auto">
         <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-white">Coaches ({coaches.length})</h3>
+            <h3 className="text-xl font-bold text-white">Coaches ({coaches.filter(c => c.email !== 'lexhewitt@gmail.com').length})</h3>
             <Button onClick={() => setIsAddModalOpen(true)}>Add New Coach</Button>
         </div>
         <table className="min-w-full bg-brand-dark text-sm">
@@ -138,9 +138,12 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
             </tr>
           </thead>
           <tbody>
-            {coaches.map(coach => {
+            {coaches
+              .filter(coach => coach.email !== 'lexhewitt@gmail.com') // Hide Lex from coaches list (they're only in Admin Management)
+              .map(coach => {
               const isAdmin = currentUser?.role === UserRole.ADMIN;
               const isSelf = currentUser?.id === coach.id;
+              const isLex = coach.email === 'lexhewitt@gmail.com'; // Protect Lex from deletion
               
               return (
                 <tr 
@@ -204,10 +207,11 @@ const CoachManagement: React.FC<CoachManagementProps> = ({ onViewCoachDashboard 
                               deleteCoach(coach.id);
                           }
                       }}
-                      disabled={!canDeleteCoaches(currentUser) || isSelf}
+                      disabled={!canDeleteCoaches(currentUser) || isSelf || isLex}
                       title={
                         !canDeleteCoaches(currentUser) ? "Only Full Admins and Super Admins can delete coaches." :
                         isSelf ? "You cannot delete your own account." :
+                        isLex ? "Lex Hewitt is a protected superadmin and cannot be deleted." :
                         `Delete ${coach.name}`
                       }
                     >

@@ -10,7 +10,7 @@ interface CalendarViewProps {
 }
 
 const CalendarView: React.FC<CalendarViewProps> = ({ coachId }) => {
-  const { classes, coaches } = useData();
+  const { classes, coaches, coachAvailability } = useData();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedClass, setSelectedClass] = useState<GymClass | null>(null);
 
@@ -59,6 +59,18 @@ const CalendarView: React.FC<CalendarViewProps> = ({ coachId }) => {
         .filter(c => c.day === dayOfWeekName)
         .sort((a,b) => a.time.localeCompare(b.time));
 
+      // Get coach availability for this day
+      const dayAvailability = coachAvailability
+        .filter(av => {
+          // Filter by coach if specified
+          if (coachId && av.coachId !== coachId) return false;
+          // Hide Lex's availability from public view
+          const coach = coaches.find(c => c.id === av.coachId);
+          if (coach && coach.email === 'lexhewitt@gmail.com') return false;
+          return av.day === dayOfWeekName;
+        })
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
       const isToday = new Date().toDateString() === date.toDateString();
 
       return (
@@ -67,6 +79,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({ coachId }) => {
             {day}
           </span>
           <div className="flex-grow space-y-1 mt-1 overflow-y-auto">
+            {/* Show coach availability as light purple blocks */}
+            {dayAvailability.map(av => {
+              const coach = coaches.find(c => c.id === av.coachId);
+              return (
+                <div 
+                  key={`avail-${av.id}-${day}`} 
+                  className="bg-purple-400/30 border border-purple-400/50 p-1 rounded-md text-xs"
+                  title={`${coach?.name || 'Coach'} available: ${av.startTime} - ${av.endTime}`}
+                >
+                  <p className="font-semibold truncate text-purple-200">Available</p>
+                  <p className="text-purple-300/80">{av.startTime} - {av.endTime}</p>
+                  {coach && <p className="text-purple-300/70 truncate text-[10px]">{coach.name}</p>}
+                </div>
+              );
+            })}
+            {/* Show classes */}
             {dayClasses.map(cls => {
                 const coach = coaches.find(c => c.id === cls.coachId);
                 return (

@@ -45,8 +45,10 @@ const CoachScheduler: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.WEEK);
 
   const filteredCoaches = useMemo(() => {
-    if (!search) return coaches;
-    return coaches.filter(coach =>
+    // Filter out Lex Hewitt from booking interface
+    const bookableCoaches = coaches.filter(coach => coach.email !== 'lexhewitt@gmail.com');
+    if (!search) return bookableCoaches;
+    return bookableCoaches.filter(coach =>
       coach.name.toLowerCase().includes(search.toLowerCase()) ||
       coach.level.toLowerCase().includes(search.toLowerCase()),
     );

@@ -50,10 +50,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegisterClick }) => {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
                         <Button 
-                            onClick={() => window.location.href = '/book'} 
+                            onClick={() => window.location.href = '/book?type=CLASS'} 
                             className="text-lg px-8 py-3"
                         >
-                            Book a Class or Session
+                            Book a Class
+                        </Button>
+                        <Button 
+                            onClick={() => window.location.href = '/book?type=PRIVATE'} 
+                            className="text-lg px-8 py-3"
+                        >
+                            Book a Session
                         </Button>
                         <Button 
                             onClick={onRegisterClick} 
@@ -98,7 +104,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegisterClick }) => {
             <section>
                  <h2 className="text-3xl font-bold text-center mb-8 text-white">Meet Our Coaches</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                     {coaches.map(coach => (
+                     {coaches
+                       .filter(coach => coach.email !== 'lexhewitt@gmail.com') // Hide Lex from public booking
+                       .map(coach => (
                          <CoachCard key={coach.id} coach={coach} showBookButton={true} />
                      ))}
                  </div>
@@ -112,10 +120,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onRegisterClick }) => {
                 </p>
                 <div className="flex flex-col sm:flex-row gap-4 justify-center">
                     <Button 
-                        onClick={() => window.location.href = '/book'} 
+                        onClick={() => window.location.href = '/book?type=CLASS'} 
                         className="text-lg px-8 py-3"
                     >
-                        Book a Class or Session
+                        Book a Class
+                    </Button>
+                    <Button 
+                        onClick={() => window.location.href = '/book?type=PRIVATE'} 
+                        className="text-lg px-8 py-3"
+                    >
+                        Book a Session
                     </Button>
                     <Button 
                         onClick={onRegisterClick} 

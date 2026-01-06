@@ -301,10 +301,12 @@ const MemberManagement: React.FC = () => {
   const [isFamilyMemberModalOpen, setIsFamilyMemberModalOpen] = useState(false);
   const [familyMemberToEdit, setFamilyMemberToEdit] = useState<{ familyMember: any; parentName: string } | null>(null);
 
-  const filteredMembers = members.filter(member =>
-    member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    member.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredMembers = members
+    .filter(member => member.email !== 'lexhewitt@gmail.com') // Hide Lex from members list
+    .filter(member =>
+      member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   
   const unpaidBookings = useMemo(() => bookings.filter(b => !b.paid), [bookings]);
 

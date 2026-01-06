@@ -15,7 +15,7 @@ type WizardStep = 'type' | 'days' | 'times' | 'review';
 const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose, coach }) => {
   const { addAvailabilitySlot } = useData();
   const [step, setStep] = useState<WizardStep>('type');
-  const [sessionType, setSessionType] = useState<SlotType | null>(null);
+  const [sessionType, setSessionType] = useState<SlotType | 'CLASS' | 'GENERAL' | null>(null);
   const [selectedDays, setSelectedDays] = useState<string[]>([]);
   const [dayTimes, setDayTimes] = useState<Record<string, { start: string; end: string }>>({});
   const [error, setError] = useState('');
@@ -92,25 +92,43 @@ const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose
     else if (step === 'review') setStep('times');
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
+    // Map sessionType to availabilityType
+    let availabilityType: 'GENERAL' | 'CLASS' | 'PRIVATE' | 'GROUP' = 'GENERAL';
+    if (sessionType === SlotType.PRIVATE) {
+      availabilityType = 'PRIVATE';
+    } else if (sessionType === SlotType.GROUP) {
+      availabilityType = 'GROUP';
+    } else if (sessionType === 'CLASS') {
+      availabilityType = 'CLASS';
+    } else if (sessionType === 'GENERAL') {
+      availabilityType = 'GENERAL';
+    }
+
     // Create availability slots for each selected day with their specific times
-    selectedDays.forEach(day => {
-      const times = dayTimes[day] || { start: '09:00', end: '17:00' };
-      addAvailabilitySlot({
-        coachId: coach.id,
-        day: day as typeof daysOfWeek[number],
-        startTime: times.start,
-        endTime: times.end,
-      });
-    });
-    
-    // Reset and close
-    setStep('type');
-    setSessionType(null);
-    setSelectedDays([]);
-    setDayTimes({});
-    setError('');
-    onClose();
+    try {
+      await Promise.all(selectedDays.map(day => {
+        const times = dayTimes[day] || { start: '09:00', end: '17:00' };
+        return addAvailabilitySlot({
+          coachId: coach.id,
+          day: day as typeof daysOfWeek[number],
+          startTime: times.start,
+          endTime: times.end,
+          availabilityType,
+        });
+      }));
+      
+      // Reset and close
+      setStep('type');
+      setSessionType(null);
+      setSelectedDays([]);
+      setDayTimes({});
+      setError('');
+      onClose();
+    } catch (err) {
+      setError('Failed to save availability. Please try again.');
+      console.error('Error saving availability:', err);
+    }
   };
 
   const handleCancel = () => {
@@ -142,7 +160,7 @@ const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose
                 }`}
               >
                 <div className="text-4xl mb-2">👤</div>
-                <h4 className="text-lg font-semibold text-white mb-1">Private Session</h4>
+                <h4 className="text-lg font-semibold text-white mb-1">Private 1-on-1</h4>
                 <p className="text-sm text-gray-400">One-on-one training sessions</p>
               </button>
               <button
@@ -156,7 +174,33 @@ const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose
               >
                 <div className="text-4xl mb-2">👥</div>
                 <h4 className="text-lg font-semibold text-white mb-1">Group Session</h4>
-                <p className="text-sm text-gray-400">Multiple participants</p>
+                <p className="text-sm text-gray-400">Small group training</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionType('CLASS' as any)}
+                className={`p-6 rounded-lg border-2 transition-all ${
+                  sessionType === 'CLASS'
+                    ? 'border-brand-red bg-brand-red/20'
+                    : 'border-gray-600 bg-brand-dark hover:border-gray-500'
+                }`}
+              >
+                <div className="text-4xl mb-2">📚</div>
+                <h4 className="text-lg font-semibold text-white mb-1">Group Class</h4>
+                <p className="text-sm text-gray-400">Scheduled group classes</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSessionType('GENERAL' as any)}
+                className={`p-6 rounded-lg border-2 transition-all ${
+                  sessionType === 'GENERAL'
+                    ? 'border-brand-red bg-brand-red/20'
+                    : 'border-gray-600 bg-brand-dark hover:border-gray-500'
+                }`}
+              >
+                <div className="text-4xl mb-2">⏰</div>
+                <h4 className="text-lg font-semibold text-white mb-1">General Availability</h4>
+                <p className="text-sm text-gray-400">Any booking type</p>
               </button>
             </div>
           </div>
@@ -167,7 +211,11 @@ const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose
           <div className="space-y-6">
             <div>
               <h3 className="text-xl font-semibold text-white mb-2">Which days are you available?</h3>
-              <p className="text-gray-400 text-sm mb-4">Select all days when you're free for {sessionType === SlotType.PRIVATE ? 'private' : 'group'} sessions.</p>
+              <p className="text-gray-400 text-sm mb-4">Select all days when you're free for {
+                sessionType === SlotType.PRIVATE ? 'private 1-on-1' : 
+                sessionType === SlotType.GROUP ? 'group' :
+                sessionType === 'CLASS' ? 'group class' :
+                'general'} sessions.</p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {daysOfWeek.map(day => (
@@ -245,7 +293,12 @@ const AvailabilityWizard: React.FC<AvailabilityWizardProps> = ({ isOpen, onClose
             <div className="bg-brand-dark p-6 rounded-lg space-y-4">
               <div>
                 <p className="text-sm text-gray-400 mb-1">Session Type</p>
-                <p className="text-white font-semibold">{sessionType === SlotType.PRIVATE ? 'Private Session' : 'Group Session'}</p>
+                <p className="text-white font-semibold">
+                  {sessionType === SlotType.PRIVATE ? 'Private 1-on-1' : 
+                   sessionType === SlotType.GROUP ? 'Group Session' :
+                   sessionType === 'CLASS' ? 'Group Class' :
+                   'General Availability'}
+                </p>
               </div>
               <div>
                 <p className="text-sm text-gray-400 mb-1">Available Days & Times</p>
